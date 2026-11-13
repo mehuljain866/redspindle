@@ -60,7 +60,7 @@ class PygameAudioPlayer:
     with zero latency, crystal-clear playback, pausing, and seeking.
     """
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._initialized = False
         if HAS_PYGAME:
             try:
@@ -82,7 +82,7 @@ class PygameAudioPlayer:
             if not self._initialized or not file_path or not os.path.exists(file_path):
                 return False
             try:
-                self.stop()
+                self._stop_unlocked()
                 pygame.mixer.music.load(file_path)
                 self._current_file = file_path
                 self._length_s = max(0.0, duration_s)
@@ -224,19 +224,22 @@ class PygameAudioPlayer:
                 pass
             return self._is_playing
 
+    def _stop_unlocked(self):
+        if not self._initialized:
+            return
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+        self._current_file = None
+        self._is_playing = False
+        self._is_paused = False
+        self._start_pos_s = 0.0
+        self._pause_pos_s = 0.0
+
     def stop(self):
         with self._lock:
-            if not self._initialized:
-                return
-            try:
-                pygame.mixer.music.stop()
-            except Exception:
-                pass
-            self._current_file = None
-            self._is_playing = False
-            self._is_paused = False
-            self._start_pos_s = 0.0
-            self._pause_pos_s = 0.0
+            self._stop_unlocked()
 
 
 class MCIAudioPlayer:
@@ -244,7 +247,7 @@ class MCIAudioPlayer:
     Fallback native Windows MCI audio player.
     """
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._alias = "cd_curator_mci"
         self._mci = ctypes.windll.winmm.mciSendStringW
         self._current_file: Optional[str] = None
