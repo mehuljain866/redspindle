@@ -41,13 +41,207 @@ except ImportError:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Native Windows MCI Audio Player with Seek & Position Tracking
+# High-Fidelity Audio Player Engine (Pygame SDL2 with Native MCI Fallback)
 # ──────────────────────────────────────────────────────────────────────────────
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
+try:
+    import pygame
+    HAS_PYGAME = True
+except ImportError:
+    pygame = None
+    HAS_PYGAME = False
+
+
+class PygameAudioPlayer:
+    """
+    High-fidelity audio player powered by Pygame (SDL2).
+    Accurately plays MP3s with large embedded ID3 cover art & lyrics tags
+    with zero latency, crystal-clear playback, pausing, and seeking.
+    """
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._initialized = False
+        if HAS_PYGAME:
+            try:
+                if not pygame.mixer.get_init():
+                    pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+                self._initialized = True
+            except Exception:
+                self._initialized = False
+
+        self._current_file: Optional[str] = None
+        self._length_s: float = 0.0
+        self._start_pos_s: float = 0.0
+        self._pause_pos_s: float = 0.0
+        self._is_paused: bool = False
+        self._is_playing: bool = False
+
+    def load_track(self, file_path: str, duration_s: float = 0.0) -> bool:
+        with self._lock:
+            if not self._initialized or not file_path or not os.path.exists(file_path):
+                return False
+            try:
+                self.stop()
+                pygame.mixer.music.load(file_path)
+                self._current_file = file_path
+                self._length_s = max(0.0, duration_s)
+                self._start_pos_s = 0.0
+                self._pause_pos_s = 0.0
+                self._is_paused = False
+                self._is_playing = False
+                return True
+            except Exception:
+                return False
+
+    def play(self, start_s: float = 0.0) -> bool:
+        with self._lock:
+            if not self._initialized or not self._current_file:
+                return False
+            try:
+                target_s = max(0.0, min(self._length_s, start_s))
+                pygame.mixer.music.play(start=target_s)
+                self._start_pos_s = target_s
+                self._pause_pos_s = target_s
+                self._is_paused = False
+                self._is_playing = True
+                return True
+            except Exception:
+                return False
+
+    def pause(self) -> bool:
+        with self._lock:
+            if not self._initialized or not self._current_file:
+                return False
+            if self._is_playing and not self._is_paused:
+                self._pause_pos_s = self._get_position_s_unlocked()
+                try:
+                    pygame.mixer.music.pause()
+                except Exception:
+                    pass
+                self._is_paused = True
+                self._is_playing = False
+                return True
+            return False
+
+    def unpause(self) -> bool:
+        with self._lock:
+            if not self._initialized or not self._current_file:
+                return False
+            if self._is_paused:
+                try:
+                    pygame.mixer.music.unpause()
+                    self._is_paused = False
+                    self._is_playing = True
+                    return True
+                except Exception:
+                    pass
+            elif not self._is_playing:
+                return self.play(start_s=self._pause_pos_s)
+            return False
+
+    def toggle_play_pause(self) -> bool:
+        if self.is_playing():
+            self.pause()
+            return False
+        else:
+            if self._is_paused:
+                self.unpause()
+            else:
+                self.play(start_s=self.get_position_s())
+            return True
+
+    def seek_relative(self, delta_ms: int) -> int:
+        delta_s = delta_ms / 1000.0
+        cur_s = self.get_position_s()
+        target_s = max(0.0, cur_s + delta_s)
+        if self._length_s > 0:
+            target_s = min(target_s, max(0.0, self._length_s - 0.5))
+        self.seek_to(int(target_s * 1000))
+        return int(target_s * 1000)
+
+    def seek_to(self, pos_ms: int):
+        with self._lock:
+            if not self._initialized or not self._current_file:
+                return
+            target_s = max(0.0, pos_ms / 1000.0)
+            if self._length_s > 0:
+                target_s = min(target_s, max(0.0, self._length_s - 0.5))
+
+            was_paused = self._is_paused or not self._is_playing
+            try:
+                pygame.mixer.music.play(start=target_s)
+                self._start_pos_s = target_s
+                self._pause_pos_s = target_s
+                if was_paused:
+                    pygame.mixer.music.pause()
+                    self._is_paused = True
+                    self._is_playing = False
+                else:
+                    self._is_paused = False
+                    self._is_playing = True
+            except Exception:
+                pass
+
+    def _get_position_s_unlocked(self) -> float:
+        if not self._current_file:
+            return 0.0
+        if self._is_paused:
+            return self._pause_pos_s
+        if self._is_playing:
+            try:
+                ms = pygame.mixer.music.get_pos()
+                if ms >= 0:
+                    pos = self._start_pos_s + (ms / 1000.0)
+                    if self._length_s > 0:
+                        pos = min(self._length_s, pos)
+                    return pos
+            except Exception:
+                pass
+        return self._pause_pos_s
+
+    def get_position_s(self) -> float:
+        with self._lock:
+            return self._get_position_s_unlocked()
+
+    def get_position_ms(self) -> int:
+        return int(self.get_position_s() * 1000)
+
+    def get_length_ms(self) -> int:
+        return int(self._length_s * 1000)
+
+    def is_playing(self) -> bool:
+        with self._lock:
+            if not self._initialized or not self._current_file:
+                return False
+            if self._is_paused:
+                return False
+            try:
+                if self._is_playing and not pygame.mixer.music.get_busy():
+                    self._is_playing = False
+                    return False
+            except Exception:
+                pass
+            return self._is_playing
+
+    def stop(self):
+        with self._lock:
+            if not self._initialized:
+                return
+            try:
+                pygame.mixer.music.stop()
+            except Exception:
+                pass
+            self._current_file = None
+            self._is_playing = False
+            self._is_paused = False
+            self._start_pos_s = 0.0
+            self._pause_pos_s = 0.0
+
 
 class MCIAudioPlayer:
     """
-    Native Windows MCI audio player for low-latency playback, pause, and seeking.
-    Requires zero external audio libraries.
+    Fallback native Windows MCI audio player.
     """
     def __init__(self):
         self._lock = threading.Lock()
@@ -57,7 +251,7 @@ class MCIAudioPlayer:
         self._is_playing: bool = False
         self._length_ms: int = 0
 
-    def load_track(self, file_path: str) -> bool:
+    def load_track(self, file_path: str, duration_s: float = 0.0) -> bool:
         with self._lock:
             self._close_internal()
             if not file_path or not os.path.exists(file_path):
@@ -73,7 +267,7 @@ class MCIAudioPlayer:
             buf = ctypes.create_unicode_buffer(128)
             self._mci(f'status {self._alias} length', buf, 128, None)
             val = buf.value.strip()
-            self._length_ms = int(val) if val.isdigit() else 0
+            self._length_ms = int(val) if val.isdigit() else int(duration_s * 1000)
             return True
 
     def play(self, from_ms: Optional[int] = None) -> bool:
@@ -170,6 +364,18 @@ class MCIAudioPlayer:
         self._current_file = None
         self._is_playing = False
         self._length_ms = 0
+
+
+def create_audio_player():
+    """
+    Factory function returning the best available audio player engine.
+    Prefers SDL2-based Pygame for glitch-free playback of MP3s with large art.
+    """
+    if HAS_PYGAME:
+        player = PygameAudioPlayer()
+        if player._initialized:
+            return player
+    return MCIAudioPlayer()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -314,7 +520,8 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self.auto_play: bool = True
 
         # Player
-        self.player = MCIAudioPlayer()
+        self.player = create_audio_player()
+        self._last_ui_is_playing = False
         self._is_seeking = False
         self._last_right_press = 0.0
         self._pending_right_timer = None
@@ -333,6 +540,7 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
 
         # Start periodic audio progress tracker
         self._poll_audio_progress()
+        self.after(50, self.focus_force)
 
     def _create_widgets(self):
         container = ctk.CTkFrame(self, fg_color="transparent")
@@ -820,9 +1028,11 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self._flash_hud("-5s ⏪", "#64B5F6")
 
     def _on_forward_click(self):
+        self.focus_set()
         self._on_right_key()
 
     def _on_rewind_click(self):
+        self.focus_set()
         self._on_left_key()
 
     def _seek_forward(self, seconds: int):
@@ -850,7 +1060,9 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             pass
 
     def _toggle_playback(self):
+        self.focus_set()
         playing = self.player.toggle_play_pause()
+        self._last_ui_is_playing = playing
         if playing:
             self.play_pause_btn.configure(text="⏸ Pause (Space)", fg_color="#FFA726", hover_color="#FB8C00")
             self._flash_hud("▶ Playing", "#81C784")
@@ -869,22 +1081,28 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             return
 
         try:
-            if self.player.is_playing():
+            is_playing = self.player.is_playing()
+            if is_playing:
                 pos_ms = self.player.get_position_ms()
                 dur_ms = self.player.get_length_ms()
                 if dur_ms > 0:
                     pct = min(100.0, max(0.0, (pos_ms / dur_ms) * 100.0))
-                    self.audio_slider.set(pct)
+                    if not self._is_seeking:
+                        self.audio_slider.set(pct)
                     cur_m, cur_s = divmod(pos_ms // 1000, 60)
                     tot_m, tot_s = divmod(dur_ms // 1000, 60)
                     self.time_label.configure(text=f"{cur_m}:{cur_s:02d} / {tot_m}:{tot_s:02d}")
-                    self.play_pause_btn.configure(text="⏸ Pause (Space)", fg_color="#FFA726")
-            else:
-                self.play_pause_btn.configure(text="▶ Play (Space)", fg_color="#1DB954")
+
+            if is_playing != self._last_ui_is_playing:
+                self._last_ui_is_playing = is_playing
+                if is_playing:
+                    self.play_pause_btn.configure(text="⏸ Pause (Space)", fg_color="#FFA726", hover_color="#FB8C00")
+                else:
+                    self.play_pause_btn.configure(text="▶ Play (Space)", fg_color="#1DB954", hover_color="#1AA34A")
         except Exception:
             pass
 
-        self.after(250, self._poll_audio_progress)
+        self.after(200, self._poll_audio_progress)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Library Scanning & Session Persistence
@@ -919,17 +1137,25 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             album = "Unknown Album"
             duration = 210.0
 
+            # Fast parse filename if in 'Artist - Title' format
+            if " - " in f.stem:
+                parts = f.stem.split(" - ", 1)
+                artist = parts[0].strip()
+                title = parts[1].strip()
+
             if mutagen and f.suffix.lower() == ".mp3":
                 try:
                     audio = MP3(str(f))
-                    duration = audio.info.length if audio.info else 210.0
-                    tags = ID3(str(f))
-                    if "TIT2" in tags:
-                        title = str(tags["TIT2"])
-                    if "TPE1" in tags:
-                        artist = str(tags["TPE1"])
-                    if "TALB" in tags:
-                        album = str(tags["TALB"])
+                    if audio.info:
+                        duration = audio.info.length
+                    tags = audio.tags
+                    if tags:
+                        if "TIT2" in tags and str(tags["TIT2"]).strip():
+                            title = str(tags["TIT2"])
+                        if "TPE1" in tags and str(tags["TPE1"]).strip():
+                            artist = str(tags["TPE1"])
+                        if "TALB" in tags and str(tags["TALB"]).strip():
+                            album = str(tags["TALB"])
                 except Exception:
                     pass
 
@@ -1056,12 +1282,16 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self._load_art_image(file_path)
 
         # Audio Load & Auto-play
-        self.player.load_track(file_path)
+        self.player.load_track(file_path, duration_s=track.get("duration", 0.0))
         self.audio_slider.set(0)
         self.time_label.configure(text=f"0:00 / {dur_m}:{dur_s:02d}")
         if self.auto_play_var.get():
             self.player.play()
-            self.play_pause_btn.configure(text="⏸ Pause (Space)", fg_color="#FFA726")
+            self._last_ui_is_playing = True
+            self.play_pause_btn.configure(text="⏸ Pause (Space)", fg_color="#FFA726", hover_color="#FB8C00")
+        else:
+            self._last_ui_is_playing = False
+            self.play_pause_btn.configure(text="▶ Play (Space)", fg_color="#1DB954", hover_color="#1AA34A")
 
     def _load_art_image(self, file_path: str):
         pil_img = None
@@ -1089,6 +1319,7 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
     # ──────────────────────────────────────────────────────────────────────────
 
     def _on_select(self):
+        self.focus_set()
         if not self.filtered_indices:
             return
         track = self.all_tracks[self.filtered_indices[self.current_idx]]
@@ -1102,6 +1333,7 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self._advance_next()
 
     def _on_reject(self):
+        self.focus_set()
         if not self.filtered_indices:
             return
         track = self.all_tracks[self.filtered_indices[self.current_idx]]
@@ -1115,6 +1347,7 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self._advance_next()
 
     def _on_undo(self):
+        self.focus_set()
         if not self.history:
             self._flash_hud("Nothing to Undo", "gray60")
             return
