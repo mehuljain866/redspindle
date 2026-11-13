@@ -2352,12 +2352,22 @@ Examples:
         help="When updating library explicit mode, only update tags & lyrics in-place without re-downloading audio",
     )
     parser.add_argument(
+        "--cd-prep",
+        action="store_true",
+        help="Launch the interactive CD Burn Prep & Song Curator tool for 700 MB CD-Rs",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version="spotify-dl 2.1.0",
     )
 
     args = parser.parse_args()
+
+    if args.cd_prep:
+        import gui
+        gui.launch()
+        return
 
     if args.update_explicit:
         target_folder = Path(args.update_explicit).expanduser().resolve()

@@ -44,6 +44,7 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 - **Blazing Fast Parallel Downloads**: Download up to 4 or 6 songs at the same time concurrently for up to 5x faster downloads. Configurable in the GUI and CLI.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
+- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes album art display, session JSON auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, and optional compression (192k/128k).
 - **Synchronized Lyrics for Apple Music and iOS**: Automatically queries LRCLIB and embeds lyrics directly into ID3 tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC). On iOS 7+ and Apple Music, simply tap the album artwork on the player screen to view the lyrics. Companion `.lrc` files are also generated.
 - **Hindi and Hinglish Lyrics Transliteration**: Choose between Romanized Hinglish (Hindi words in English alphabet for easy singing along), native Devanagari Hindi script, or unmodified database original. Built-in transliteration intelligently converts Devanagari lyrics and timestamps to Latin characters.
 - **Official iTunes Advisory Badges**: Tags songs with Apple Music advisory ratings (`[E]` for Explicit uncensored and `[Clean]` for clean radio edits).
@@ -114,6 +115,7 @@ python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode cle
 | `--fix-tags` | Fix fragmented albums for iTunes/Apple Music by unifying Album Artist | `None` |
 | `--update-explicit` | Update existing songs in a folder to Explicit or Clean audio/lyrics | `None` |
 | `--no-redownload` | When updating explicit mode, only update tags/lyrics without re-downloading audio | `False` |
+| `--cd-prep` | Launch interactive CD Burn Prep & Song Curator tool | `False` |
 
 ---
 
@@ -236,3 +238,39 @@ If your music library occupies too much storage space (e.g. downloaded at 320 kb
    ```
 
 > **Note on Upgrading Audio Quality**: Re-encoding lower-bitrate audio files to higher bitrates cannot restore lost frequencies. To truly upgrade lower-bitrate tracks to pristine 320 kbps, check **Overwrite existing tracks (force re-download)** in the main window and click **Start Download** — Spotify Downloader will re-fetch the original 320k source streams directly from Spotify.
+
+---
+
+## CD Burn Preparation and Smart Disc Splitting
+
+If you have a large library of downloaded songs and want to burn them onto standard 700 MB CD-Rs (such as Moser Baer white discs) or DVDs, Spotify Downloader includes an interactive "Tinder-style" curation and smart disc-splitting tool:
+
+### Keyboard Curation Controls
+
+- **Up Arrow**: **Keep / Select** the current song for CD burning.
+- **Down Arrow**: **Skip / Reject** the current song.
+- **Right Arrow**: Fast-forward audio seek:
+  - **Single-tap**: advance forward **5 seconds**.
+  - **Double-tap**: advance forward **10 seconds**.
+- **Left Arrow (Back)**: Rewind audio seek:
+  - **Single-tap**: rewind **5 seconds**.
+  - **Double-tap**: rewind **10 seconds**.
+- **Spacebar**: **Play / Pause** toggle.
+- **Backspace or Z**: **Undo** the last decision and step back.
+- **P**: Quick play/pause toggle.
+
+### Smart Disc Packing and Exporting
+
+1. **In the Desktop App**:
+   - In the **Download Folder** card, click **CD Burn Prep...**.
+   - Review your songs one by one with album artwork, title, artist, duration, and original/compressed file size.
+   - Choose your **Target Quality** (e.g. `192 kbps` fits ~145-150 songs per disc, `128 kbps` fits ~215-220 songs per disc, or `Original`).
+   - The live status bar calculates your total disc requirements in real time as you make decisions (e.g. `Disc 1: 98 songs (688 MB / 690 MB) [FULL] | Disc 2: ...`).
+   - Your progress is automatically saved to `cd_curation_session.json` so you can close and resume anytime without losing your selections.
+   - Click **Export Disc Folders** to generate dedicated `Disc 1/`, `Disc 2/`, `Disc 3/` folders complete with track numbering (`01 - Artist - Title.mp3`), `playlist.m3u`, and `disc_tracklist.txt`.
+   - Burn each disc folder directly using Windows Media Player, ImgBurn, CDBurnerXP, or Nero!
+
+2. **In the Terminal (CLI)**:
+   ```powershell
+   python spotify_dl.py --cd-prep
+   ```

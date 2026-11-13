@@ -296,7 +296,19 @@ class SpotifyDownloaderApp(ctk.CTk):
             text_color="#FFB74D",
             command=self._open_explicit_dialog,
         )
-        explicit_tool_btn.pack(side="left", fill="x", expand=True)
+        explicit_tool_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        cd_prep_btn = ctk.CTkButton(
+            folder_tools_row,
+            text="CD Burn Prep...",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#3B1E2B",
+            hover_color="#552B3E",
+            text_color="#F48FB1",
+            command=self._open_cd_prep_dialog,
+        )
+        cd_prep_btn.pack(side="left", fill="x", expand=True)
 
         # ── Download Settings Card ───────────────────────────────────────────
         settings_frame = ctk.CTkFrame(main_frame, fg_color="#1E1E1E", corner_radius=10)
@@ -564,6 +576,13 @@ class SpotifyDownloaderApp(ctk.CTk):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = ExplicitLyricsDialog(self, f_path)
+        dialog.focus()
+
+    def _open_cd_prep_dialog(self):
+        from cd_prep import CDBurnPrepDialog
+        folder_str = self.folder_entry.get().strip()
+        f_path = Path(folder_str) if folder_str else self.output_dir
+        dialog = CDBurnPrepDialog(self, f_path)
         dialog.focus()
 
     def _append_log(self, text: str):
@@ -1889,6 +1908,8 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
 
 def launch():
     app = SpotifyDownloaderApp()
+    if "--cd-prep" in sys.argv:
+        app.after(100, app._open_cd_prep_dialog)
     app.mainloop()
 
 
