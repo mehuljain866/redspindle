@@ -245,6 +245,10 @@ If your music library occupies too much storage space (e.g. downloaded at 320 kb
 
 If you have a large library of downloaded songs and want to burn them onto standard 700 MB CD-Rs (such as Moser Baer white discs) or DVDs, Spotify Downloader includes an interactive "Tinder-style" curation and smart disc-splitting tool:
 
+<p align="center">
+  <img src="assets/screenshot-cd-prep.png" alt="CD Burn Prep and Song Curator" width="550" />
+</p>
+
 ### Keyboard Curation Controls
 
 - **Up Arrow**: **Keep / Select** the current song for CD burning.
