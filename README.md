@@ -294,6 +294,11 @@ Once your songs are curated or burned, generate high-resolution printable circul
   <img src="assets/screenshot-cd-art.png" alt="CD Sticker and Grid Art Studio" width="700" />
 </p>
 
+<p align="center">
+  <img src="assets/cd-player.gif" alt="Printed CD Sticker in Action" width="320" /><br />
+  <em>Real-world result: 1:1 true-to-scale printed CD sticker loaded into a physical CD player tray.</em>
+</p>
+
 ### Layout Styles
 
 - **Style 1: Curved Polar Fan Mosaic (CD Disc)**:
