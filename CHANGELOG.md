@@ -1,0 +1,105 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [2.2.0] - 2026-11-14
+
+### Added
+- **CD & Grid Art Studio**:
+  - Full-featured artwork and disc label generator with interactive live preview.
+  - **Style 1: Curved Polar Fan Mosaic (CD Disc)**: 100% full-bleed annular wedges curving along disc radius that dynamically scale from center spindle to outer perimeter.
+  - **Style 2: Floating Concentric Tiles (CD Disc)**: Tangentially rotated crisp square album covers arranged in concentric circular rings over a sleek vinyl backdrop.
+  - **Style 3: Any-by-Any Grid (Jewel Case Inserts and Posters)**: Auto-optimum or custom Rows &times; Columns grids with presets for CD Jewel Case Front Insert (120&times;120 mm), Back Tray Insert (150&times;118 mm), Desktop Wallpaper (16:9), and Poster (3:4).
+  - Configurable tile spacing (gap) and corner rounding sliders.
+- **Intelligent Album Cover Deduplication**:
+  - Automatically identifies songs from the same album or identical embedded artwork.
+  - Places each unique album cover on the disc/grid exactly once, eliminating repetitive clutter.
+  - Includes a live toggle switch (`Deduplicate Albums`) in the UI that dynamically updates the preview and adapts the grid.
+- **True 1:1 Scale Printable A4 Sheets**:
+  - High-resolution (300 DPI) print-ready A4 export with 120 mm circular cutlines, center spindle hole, and alignment crosshairs.
+  - Saves as high-resolution PNG or PDF for direct printing on standard sticker paper.
+- **Windows Clipboard Integration**:
+  - 1-click clipboard copy (`CF_DIB` 64-bit format) to paste generated artwork directly into Word, Paint, Photoshop, or printer software.
+- **Center Hub Custom Typography**:
+  - Customizable Disc Title, Subtitle, and extra metadata notes with Small Spindle (15–20 mm) and Standard Hub (40 mm) cutouts.
+- **Multi-Threaded CD Disc Export**:
+  - Parallelized disc folder generation (`ThreadPoolExecutor`) in CD Burn Prep, reducing export times for 100–200 tracks by up to 5x.
+
+### Changed
+- Reorganized main window toolbar into dedicated rows for General Audio Maintenance and CD / Artwork Tools.
+- Clarified audio pipeline in documentation: accurately states that high-fidelity audio streams are fetched via YouTube / YouTube Music matched against official Spotify metadata.
+
+---
+
+## [2.1.0] - 2026-11-13
+
+### Added
+- **Interactive CD Burn Prep & Song Curator**:
+  - "Tinder-style" curation tool with instant keyboard navigation (Up = Keep, Down = Skip, Space = Play/Pause, Right = +5s/+10s seek, Left = -5s/-10s seek, Backspace/Z = Undo).
+  - High-fidelity PyGame SDL2 audio playback engine with WASAPI and DirectSound support, bypassing Windows MCI limits on large ID3 tags.
+  - Smart capacity disc packing: automatically distributes curated tracks into `Disc 1/`, `Disc 2/`, `Disc 3/` folders fitting standard 700 MB CD-Rs (Moser Baer).
+  - Session JSON persistence (`cd_curation_session.json`): safely auto-saves progress so curation can be resumed anytime.
+  - Auto-generated playlists (`playlist.m3u`) and track summaries (`disc_tracklist.txt`) in each disc folder.
+
+---
+
+## [2.0.0] - 2026-11-03
+
+### Added
+- **Apple Music, iTunes, and iPod Optimization**:
+  - Automated `Album Artist` (`TPE2` / `aART`) tag unification to eliminate fragmented / split albums on Apple Music, iOS, and click-wheel iPods.
+  - Standalone lossless repair tool (**Fix Split Albums...** / `--fix-tags`) to harmonize existing libraries in seconds without re-compressing audio.
+  - Apple Music advisory ratings: tags songs with official iTunes `[E]` (Explicit) or `[Clean]` badges.
+  - Standardized 640&times;640 baseline JPEG artwork embedding for smooth rendering on vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano).
+
+---
+
+## [1.3.0] - 2026-10-28
+
+### Added
+- **Synchronized Lyrics for Apple Music and iOS**:
+  - Direct integration with LRCLIB to embed synchronized lyrics into ID3 tags (`USLT` for MP3, `©lyr` for M4A).
+  - Enables iOS tap-to-view lyrics on iPhone and iPod touch lock screen and player interfaces.
+  - Companion `.lrc` timestamped files generated alongside each track.
+- **Multilingual Hinglish Transliteration**:
+  - Automatic transliteration engine for Bollywood and Hindi songs, converting Devanagari lyrics to Romanized Hinglish for singing along.
+  - Three configurable script modes: Hinglish, native Devanagari, or raw database original.
+
+---
+
+## [1.2.0] - 2026-10-27
+
+### Added
+- **Audio Downsizing and Storage Optimizer**:
+  - Downsize existing music collections to 128k, 160k, or 192k bitrates using FFmpeg.
+  - Intelligent bitrate filter: only proposes bitrates lower than the current file's actual bitrate.
+  - Preserves 100% of ID3 metadata, album covers, and lyrics tags without quality loss on tags.
+  - Supports both in-place replacement and dedicated output subfolders.
+
+---
+
+## [1.1.0] - 2026-10-26
+
+### Added
+- **Parallel Download Engine**:
+  - Concurrent multi-worker downloading (4–6 songs at once) for up to 5x faster downloads.
+- **Clean vs Explicit Audio Modes**:
+  - Choose between original uncensored explicit releases or official clean radio edits.
+- **Smart Incremental Sync**:
+  - Avoids re-downloading previously fetched tracks in existing folders.
+
+---
+
+## [1.0.0] - 2026-10-25
+
+### Added
+- Initial public release of Spotify Downloader.
+- Modern dark-mode CustomTkinter desktop GUI and full-featured CLI.
+- Spotify playlist, album, and track metadata scraping via `spotapi`.
+- High-resolution audio stream matching via YouTube / YouTube Music using `yt-dlp`.
+- Standalone single-file PyInstaller executables and single-command install scripts.
