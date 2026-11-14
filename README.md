@@ -4,7 +4,15 @@
   <img src="assets/icon.png" alt="Spotify Downloader Icon" width="120" height="120" />
 </p>
 
-A fast, modern desktop application and CLI that downloads Spotify playlists, albums, or individual tracks — with full ID3 metadata, high-resolution album art, and synchronized lyrics embedded.
+<p align="center">
+  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/Apple%20Music-100%25%20Ready-FA2D48?style=flat&logo=apple-music&logoColor=white" alt="Apple Music Ready" /></a>
+  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/iPod-Classic%20%7C%20Nano%20%7C%20Touch-888888?style=flat&logo=apple&logoColor=white" alt="iPod Compatible" /></a>
+  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/iTunes-Sync%20Optimized-E74C3C?style=flat&logo=itunes&logoColor=white" alt="iTunes Sync Ready" /></a>
+  <a href="#cd-burn-preparation-and-smart-disc-splitting"><img src="https://img.shields.io/badge/CD--R%20Burn-Smart%20Packing-E65100?style=flat" alt="CD-R Smart Packing" /></a>
+  <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
+</p>
+
+A fast, modern desktop music downloader and library manager engineered specifically for **Apple Music, iTunes, and iPod users** as well as **physical CD burning enthusiasts**. Downloads entire Spotify playlists, albums, and tracks with **zero split albums** on iOS/iPods, embedded synchronized lyrics you can tap to read, pristine high-res album covers, and complete ID3 tags.
 
 <p align="center">
   <img src="assets/screenshot.png" alt="Spotify Downloader" width="550" />
@@ -40,9 +48,22 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 ---
 
+## Built for Apple Music, iTunes, and iPods
+
+Most generic music downloaders create major headaches when importing into iTunes, Apple Music, or syncing to an iPod. **Spotify Downloader** solves these issues out of the box:
+
+- **Zero Split Albums (Unified Album Artist)**: On Apple Music and iPods, albums with guest features (e.g. Gorillaz feat. Snoop Dogg) notoriously splinter into multiple separate 1-song albums. Spotify Downloader automatically unifies the `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) across every track so albums stay intact under one unified album card.
+- **Embedded Synchronized Lyrics for iOS and iPod**: External `.lrc` files are completely ignored by Apple Music and iPods. Spotify Downloader queries LRCLIB and embeds lyrics directly into the audio metadata (`USLT` for MP3, `©lyr` for M4A). On your iPhone or iPod touch (iOS 7 through iOS 18), tap the album artwork while playing to reveal the synchronized lyrics overlay.
+- **iPod-Optimized 640x640 Artwork**: Oversized, interlaced, or progressive cover images cause lag, memory crashes, or black squares on vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Every track receives a clean, standardized 640&times;640 baseline JPEG cover that loads instantly.
+- **Official Apple Advisory Badges**: Injects iTunes `rtng` advisory metadata so your tracks display official `[E]` (Explicit) or `[Clean]` badges in Apple Music and iTunes.
+- **100% Lossless Existing Library Fixer**: Already have a huge music folder plagued by split albums? Click **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to harmonize your entire collection in seconds without re-compressing the audio.
+
+---
+
 ## Features
 
 - **Blazing Fast Parallel Downloads**: Download up to 4 or 6 songs at the same time concurrently for up to 5x faster downloads. Configurable in the GUI and CLI.
+- **iPod and Apple Music Ready**: Native embedded lyrics, unified Album Artist tags (no split albums), and iTunes advisory ratings out of the box.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
 - **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes high-fidelity SDL2 playback, album art display, session JSON auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded parallel export (`ThreadPoolExecutor`), and optional compression (192k/128k).
 - **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate high-resolution 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
