@@ -21,15 +21,15 @@ jobs:
             artifact_name: Spotify-Downloader-Windows.exe
             build_cmd: |
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --windowed --name "Spotify-Downloader-Windows" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --add-data "icon.ico;." gui.py
+              pyinstaller --onefile --windowed --name "Spotify-Downloader-Windows" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico;." gui.py
             output_path: dist/Spotify-Downloader-Windows.exe
 
           - os: ubuntu-latest
             artifact_name: Spotify-Downloader-Linux
             build_cmd: |
-              sudo apt-get update && sudo apt-get install -y ffmpeg python3-tk
+              sudo apt-get update && sudo apt-get install -y ffmpeg python3-tk libgl1 libglib2.0-0
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --name "Spotify-Downloader-Linux" --collect-all customtkinter --collect-all spotapi --add-data "icon.ico:." gui.py
+              pyinstaller --onefile --name "Spotify-Downloader-Linux" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico:." gui.py
             output_path: dist/Spotify-Downloader-Linux
 
           - os: macos-latest
@@ -37,7 +37,7 @@ jobs:
             build_cmd: |
               brew install ffmpeg python-tk@3.12 || true
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --windowed --name "Spotify-Downloader-macOS" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --add-data "icon.ico:." gui.py
+              pyinstaller --onefile --windowed --name "Spotify-Downloader-macOS" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico:." gui.py
               cd dist && zip -r Spotify-Downloader-macOS.zip Spotify-Downloader-macOS.app Spotify-Downloader-macOS 2>/dev/null || zip -r Spotify-Downloader-macOS.zip *
             output_path: dist/Spotify-Downloader-macOS.zip
 
@@ -82,8 +82,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || 'v1.0.0' }}
-          name: Spotify Downloader ${{ github.ref_name || 'v1.0.0' }}
+          tag_name: ${{ github.ref_name || 'v2.2.0' }}
+          name: Spotify Downloader ${{ github.ref_name || 'v2.2.0' }}
           draft: false
           prerelease: false
           files: final_assets/*
