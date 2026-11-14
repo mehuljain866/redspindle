@@ -62,6 +62,7 @@ Prefer a portable single-file app without installing Python? Download from [**La
 - **Embedded High-Resolution Album Art**: Injects 640×640 album artwork directly into every audio file.
 - **Complete ID3 Tags**: Title, Lead Artist, Contributing/Featured Artists, Album, Track Number, Disc Number, and Release Date intact. Widely compatible with Windows Explorer, VLC, iTunes, Apple Music, and mobile players.
 - **Zero Configuration**: No Spotify API key, developer account, or login required.
+- **How It Works**: Queries Spotify and LRCLIB for official track metadata, album artwork, and synchronized lyrics, then fetches the matching audio stream via YouTube / YouTube Music using `yt-dlp`, encoding cleanly to your chosen format and bitrate (MP3 / M4A / FLAC).
 
 ---
 
@@ -242,7 +243,7 @@ If your music library occupies too much storage space (e.g. downloaded at 320 kb
    python spotify_dl.py --downsize "C:\Users\mehul\Music\Spotify Downloads" --bitrate 192k
    ```
 
-> **Note on Upgrading Audio Quality**: Re-encoding lower-bitrate audio files to higher bitrates cannot restore lost frequencies. To truly upgrade lower-bitrate tracks to pristine 320 kbps, check **Overwrite existing tracks (force re-download)** in the main window and click **Start Download** — Spotify Downloader will re-fetch the original 320k source streams directly from Spotify.
+> **Note on Upgrading Audio Quality**: Re-encoding lower-bitrate audio files to higher bitrates cannot restore lost frequencies. To truly upgrade lower-bitrate tracks to maximum quality (e.g. 320 kbps), check **Overwrite existing tracks (force re-download)** in the main window and click **Start Download** — Spotify Downloader will re-fetch the best available source streams via YouTube / YouTube Music matched against official Spotify metadata.
 
 ---
 
