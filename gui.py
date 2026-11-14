@@ -66,8 +66,8 @@ class SpotifyDownloaderApp(ctk.CTk):
         ctk.set_default_color_theme("green")
 
         self.title("Spotify Downloader")
-        self.geometry("660x730")
-        self.minsize(620, 640)
+        self.geometry("680x770")
+        self.minsize(620, 680)
 
         # Set window icon if available
         icon_path = SCRIPT_DIR / "icon.ico"
@@ -258,12 +258,12 @@ class SpotifyDownloaderApp(ctk.CTk):
         )
         open_folder_btn.pack(side="left")
 
-        # Tool buttons for folder maintenance
-        folder_tools_row = ctk.CTkFrame(folder_inner, fg_color="transparent")
-        folder_tools_row.pack(fill="x", pady=(8, 0))
+        # Tool buttons for folder maintenance & CD burning
+        folder_tools_row1 = ctk.CTkFrame(folder_inner, fg_color="transparent")
+        folder_tools_row1.pack(fill="x", pady=(8, 0))
 
         downsize_tool_btn = ctk.CTkButton(
-            folder_tools_row,
+            folder_tools_row1,
             text="Downsize Quality...",
             font=ctk.CTkFont(size=11, weight="bold"),
             height=32,
@@ -275,7 +275,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         downsize_tool_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
         fix_tags_btn = ctk.CTkButton(
-            folder_tools_row,
+            folder_tools_row1,
             text="Fix Split Albums...",
             font=ctk.CTkFont(size=11, weight="bold"),
             height=32,
@@ -287,7 +287,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         fix_tags_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
         explicit_tool_btn = ctk.CTkButton(
-            folder_tools_row,
+            folder_tools_row1,
             text="Explicit & Lyrics...",
             font=ctk.CTkFont(size=11, weight="bold"),
             height=32,
@@ -296,11 +296,15 @@ class SpotifyDownloaderApp(ctk.CTk):
             text_color="#FFB74D",
             command=self._open_explicit_dialog,
         )
-        explicit_tool_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        explicit_tool_btn.pack(side="left", fill="x", expand=True)
+
+        # Row 2: CD Burning & Artwork Tools
+        cd_tools_row2 = ctk.CTkFrame(folder_inner, fg_color="transparent")
+        cd_tools_row2.pack(fill="x", pady=(6, 0))
 
         cd_prep_btn = ctk.CTkButton(
-            folder_tools_row,
-            text="CD Burn Prep...",
+            cd_tools_row2,
+            text="CD Burn Prep & Curator...",
             font=ctk.CTkFont(size=11, weight="bold"),
             height=32,
             fg_color="#3B1E2B",
@@ -308,7 +312,19 @@ class SpotifyDownloaderApp(ctk.CTk):
             text_color="#F48FB1",
             command=self._open_cd_prep_dialog,
         )
-        cd_prep_btn.pack(side="left", fill="x", expand=True)
+        cd_prep_btn.pack(side="left", fill="x", expand=True, padx=(0, 6))
+
+        cd_art_btn = ctk.CTkButton(
+            cd_tools_row2,
+            text="CD & Grid Art Studio...",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=32,
+            fg_color="#1E3B33",
+            hover_color="#2B5549",
+            text_color="#80CBC4",
+            command=self._open_cd_art_dialog,
+        )
+        cd_art_btn.pack(side="left", fill="x", expand=True)
 
         # ── Download Settings Card ───────────────────────────────────────────
         settings_frame = ctk.CTkFrame(main_frame, fg_color="#1E1E1E", corner_radius=10)
@@ -583,6 +599,13 @@ class SpotifyDownloaderApp(ctk.CTk):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = CDBurnPrepDialog(self, f_path)
+        dialog.focus()
+
+    def _open_cd_art_dialog(self):
+        from cd_art import CDArtStudioDialog
+        folder_str = self.folder_entry.get().strip()
+        f_path = Path(folder_str) if folder_str else self.output_dir
+        dialog = CDArtStudioDialog(self, f_path)
         dialog.focus()
 
     def _append_log(self, text: str):

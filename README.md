@@ -44,7 +44,12 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 - **Blazing Fast Parallel Downloads**: Download up to 4 or 6 songs at the same time concurrently for up to 5x faster downloads. Configurable in the GUI and CLI.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
-- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes album art display, session JSON auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, and optional compression (192k/128k).
+- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes high-fidelity SDL2 playback, album art display, session JSON auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded parallel export (`ThreadPoolExecutor`), and optional compression (192k/128k).
+- **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate high-resolution 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
+  1. *Curved Polar Fan Mosaic*: 100% full-bleed wedges curved along the CD radius and arc that scale smoothly from the center hub to the outer rim.
+  2. *Floating Concentric Tiles*: Tangentially rotated unwarped square covers arranged in concentric rings over a sleek vinyl backdrop.
+  3. *Any-by-Any Grid*: Auto-optimum or custom $R \times C$ grids for CD jewel case front covers (120x120mm), back tray inserts (150x118mm), posters, and wallpapers with custom tile spacing and corner rounding.
+  Includes live interactive preview, custom center hub typography, 15mm/40mm spindle cutouts, cutting guides, 1:1 scale printable A4 sheets, and 1-click clipboard copy.
 - **Synchronized Lyrics for Apple Music and iOS**: Automatically queries LRCLIB and embeds lyrics directly into ID3 tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC). On iOS 7+ and Apple Music, simply tap the album artwork on the player screen to view the lyrics. Companion `.lrc` files are also generated.
 - **Hindi and Hinglish Lyrics Transliteration**: Choose between Romanized Hinglish (Hindi words in English alphabet for easy singing along), native Devanagari Hindi script, or unmodified database original. Built-in transliteration intelligently converts Devanagari lyrics and timestamps to Latin characters.
 - **Official iTunes Advisory Badges**: Tags songs with Apple Music advisory ratings (`[E]` for Explicit uncensored and `[Clean]` for clean radio edits).
@@ -278,3 +283,35 @@ If you have a large library of downloaded songs and want to burn them onto stand
    ```powershell
    python spotify_dl.py --cd-prep
    ```
+
+---
+
+## CD and Grid Art Studio (Stickers and Collages)
+
+Once your songs are curated or burned, generate high-resolution printable circular CD stickers (120 mm) or square/rectangular artwork collages with the built-in **CD & Grid Art Studio**:
+
+<p align="center">
+  <img src="assets/screenshot-cd-art.png" alt="CD Sticker and Grid Art Studio" width="700" />
+</p>
+
+### Layout Styles
+
+- **Style 1: Curved Polar Fan Mosaic (CD Disc)**:
+  - 100% full-bleed coverage with zero blank space.
+  - Mathematically maps each album cover into an annular wedge curving along the circular disc radius.
+  - Dynamically scales cells from compact near the center spindle to large at the outer rim.
+- **Style 2: Floating Concentric Tiles (CD Disc)**:
+  - Preserves original unwarped square album cover aspect ratios.
+  - Arranged in concentric rings rotated tangentially around the center hub over a sleek dark vinyl backdrop.
+  - Scales tile dimensions smoothly from inner hub to outer perimeter.
+- **Style 3: Any-by-Any Grid (Jewel Case Inserts and Posters)**:
+  - **Auto-Optimum Grid**: Automatically calculates the most balanced square/rectangular grid for your song count (e.g. 100 songs &rarr; 10&times;10).
+  - **Custom Dimensions**: Enter any custom Rows &times; Columns.
+  - **Presets**: Standard CD Jewel Case Front Insert (120&times;120 mm), Back Tray Insert (150&times;118 mm), Desktop Wallpaper (16:9), and Poster (3:4).
+  - Configurable tile spacing (gap) and corner rounding sliders.
+
+### Center Hub and Print Features
+
+- **Custom Typography**: Add custom Disc Title, Subtitle, and extra notes (e.g. track count, date, brand) directly in the center hub.
+- **Spindle Sizing**: Choose between Small Spindle (15-20 mm full-coverage sticker) or Standard Hub (40 mm clear center ring).
+- **Physical Scale (300 DPI)**: Export 1:1 physical scale printable A4 sheets with alignment crosshairs ready for sticky paper, or copy directly to clipboard.
