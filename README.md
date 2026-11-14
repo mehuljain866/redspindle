@@ -312,6 +312,7 @@ Once your songs are curated or burned, generate high-resolution printable circul
 
 ### Center Hub and Print Features
 
+- **Intelligent Album Deduplication**: Automatically detects multiple songs from the same album or identical embedded artwork and shows each album cover exactly once without repetitive clutter (includes a live toggle to view unique albums vs all tracks).
 - **Custom Typography**: Add custom Disc Title, Subtitle, and extra notes (e.g. track count, date, brand) directly in the center hub.
 - **Spindle Sizing**: Choose between Small Spindle (15-20 mm full-coverage sticker) or Standard Hub (40 mm clear center ring).
 - **Physical Scale (300 DPI)**: Export 1:1 physical scale printable A4 sheets with alignment crosshairs ready for sticky paper, or copy directly to clipboard.

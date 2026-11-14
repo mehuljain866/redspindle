@@ -18,6 +18,7 @@ import io
 import glob
 import ctypes
 import queue
+import hashlib
 import threading
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple, Any
@@ -135,49 +136,81 @@ def create_placeholder_cover(title: str, artist: str, size: int = 300) -> Image.
     return img
 
 
-def extract_cover_from_file(file_path: Path) -> Optional[Image.Image]:
-    """Extracts embedded cover art from MP3, FLAC, M4A, or nearby folder/cover images."""
-    if not HAS_MUTAGEN:
-        return None
-
-    ext = file_path.suffix.lower()
+def extract_track_cover_and_metadata(file_path: Path) -> Tuple[Optional[Image.Image], str, str, str, Optional[str]]:
+    """
+    Extracts embedded cover art, track title, artist, album, and MD5 image hash.
+    Returns: (cover_image, title, artist, album, md5_hash)
+    """
+    title = file_path.stem
+    artist = ""
+    album = ""
     img_data = None
+    ext = file_path.suffix.lower()
 
-    try:
-        if ext == ".mp3":
-            tag = ID3(file_path)
-            for k in tag.keys():
-                if k.startswith("APIC"):
-                    img_data = tag[k].data
-                    break
-        elif ext == ".flac":
-            audio = FLAC(file_path)
-            if audio.pictures:
-                img_data = audio.pictures[0].data
-        elif ext in (".m4a", ".mp4"):
-            audio = MP4(file_path)
-            if "covr" in audio and audio["covr"]:
-                img_data = bytes(audio["covr"][0])
-    except Exception:
-        pass
+    if HAS_MUTAGEN:
+        try:
+            if ext == ".mp3":
+                tag = ID3(file_path)
+                t = tag.get("TIT2")
+                if t and t.text:
+                    title = str(t.text[0]).strip()
+                a = tag.get("TPE1") or tag.get("TPE2")
+                if a and a.text:
+                    artist = str(a.text[0]).strip()
+                alb = tag.get("TALB")
+                if alb and alb.text:
+                    album = str(alb.text[0]).strip()
+                for k in tag.keys():
+                    if k.startswith("APIC"):
+                        img_data = tag[k].data
+                        break
+            elif ext == ".flac":
+                audio = FLAC(file_path)
+                title = audio.get("title", [title])[0]
+                artist = audio.get("artist", [""])[0]
+                album = audio.get("album", [""])[0]
+                if audio.pictures:
+                    img_data = audio.pictures[0].data
+            elif ext in (".m4a", ".mp4"):
+                audio = MP4(file_path)
+                title = audio.get("©nam", [title])[0]
+                artist = audio.get("©ART", audio.get("aART", [""]))[0]
+                album = audio.get("©alb", [""])[0]
+                if "covr" in audio and audio["covr"]:
+                    img_data = bytes(audio["covr"][0])
+        except Exception:
+            pass
+
+    cover_im = None
+    img_hash = None
 
     if img_data:
         try:
-            im = Image.open(io.BytesIO(img_data)).convert("RGB")
-            return im
+            cover_im = Image.open(io.BytesIO(img_data)).convert("RGB")
+            img_hash = hashlib.md5(img_data).hexdigest()
         except Exception:
             pass
 
     # Check for external cover file in same directory
-    for name in ("cover.jpg", "cover.png", "folder.jpg", "album.jpg", "front.jpg"):
-        candidate = file_path.parent / name
-        if candidate.exists():
-            try:
-                return Image.open(candidate).convert("RGB")
-            except Exception:
-                pass
+    if not cover_im:
+        for name in ("cover.jpg", "cover.png", "folder.jpg", "album.jpg", "front.jpg"):
+            candidate = file_path.parent / name
+            if candidate.exists():
+                try:
+                    c_data = candidate.read_bytes()
+                    cover_im = Image.open(io.BytesIO(c_data)).convert("RGB")
+                    img_hash = hashlib.md5(c_data).hexdigest()
+                    break
+                except Exception:
+                    pass
 
-    return None
+    return cover_im, title, artist, album, img_hash
+
+
+def extract_cover_from_file(file_path: Path) -> Optional[Image.Image]:
+    """Compatibility wrapper: extracts cover image from file."""
+    cov, _, _, _, _ = extract_track_cover_and_metadata(file_path)
+    return cov
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -656,7 +689,8 @@ class CDArtStudioDialog(ctk.CTkToplevel):
         self.output_folder.mkdir(parents=True, exist_ok=True)
 
         # Loaded song/cover data
-        self.loaded_items: List[Dict[str, Any]] = []
+        self.all_items: List[Dict[str, Any]] = []
+        self.unique_items: List[Dict[str, Any]] = []
         self.cached_covers: List[Image.Image] = []
         self.cached_thumbnails: List[Image.Image] = []
 
@@ -724,13 +758,24 @@ class CDArtStudioDialog(ctk.CTkToplevel):
             command=self._browse_folder
         ).pack(side="left")
 
+        # Deduplication toggle switch (1 cover per album)
+        self.dedup_switch = ctk.CTkSwitch(
+            folder_card,
+            text="Deduplicate Albums (1 cover per album)",
+            command=self._on_dedup_toggled,
+            progress_color="#00897B",
+            font=ctk.CTkFont(size=11, weight="bold")
+        )
+        self.dedup_switch.select()
+        self.dedup_switch.pack(anchor="w", padx=12, pady=(4, 4))
+
         self.status_badge = ctk.CTkLabel(
             folder_card,
             text="Scanning folder for album art...",
             font=ctk.CTkFont(size=11),
             text_color="#80CBC4"
         )
-        self.status_badge.pack(anchor="w", padx=12, pady=(0, 10))
+        self.status_badge.pack(anchor="w", padx=12, pady=(0, 8))
 
         # 2. Style Selector Section
         style_card = ctk.CTkFrame(self.left_panel, fg_color="#222328", corner_radius=8)
@@ -1066,56 +1111,118 @@ class CDArtStudioDialog(ctk.CTkToplevel):
                 for ext in ("*.mp3", "*.flac", "*.m4a", "*.mp4"):
                     files.extend(list(self.source_folder.glob(ext)))
                     files.extend(list(self.source_folder.glob(f"**/{ext}")))
-                # Deduplicate and sort
+                # Deduplicate path references and sort
                 files = sorted(list({p.resolve() for p in files}))
 
-                items = []
-                covers = []
-                thumbnails = []
+                all_items = []
+                unique_items = []
+                seen_albums = set()
+                seen_hashes = set()
 
                 for f in files:
-                    cov = extract_cover_from_file(f)
+                    cov, title, artist, album, img_hash = extract_track_cover_and_metadata(f)
                     if not cov:
-                        cov = create_placeholder_cover(f.stem, f.parent.name)
+                        cov = create_placeholder_cover(title, artist)
+                        img_hash = hashlib.md5(f"{title}-{artist}".encode()).hexdigest()
 
                     thumb = cov.copy()
                     thumb.thumbnail((120, 120), Image.Resampling.LANCZOS)
 
-                    covers.append(cov)
-                    thumbnails.append(thumb)
-                    items.append({"path": f, "title": f.stem, "cover": cov})
+                    item = {
+                        "path": f,
+                        "title": title,
+                        "artist": artist,
+                        "album": album,
+                        "cover": cov,
+                        "thumb": thumb,
+                        "hash": img_hash
+                    }
+                    all_items.append(item)
 
-                self._scan_queue.put(("DONE", items, covers, thumbnails))
+                    # Deduplication check: only one cover per unique album or identical cover art
+                    is_dup = False
+                    norm_album = album.strip().lower()
+                    norm_artist = artist.strip().lower()
+
+                    if norm_album and norm_album not in ("single", "unknown", ""):
+                        album_key = (norm_album, norm_artist)
+                        if album_key in seen_albums:
+                            is_dup = True
+                        else:
+                            seen_albums.add(album_key)
+
+                    if not is_dup and img_hash:
+                        if img_hash in seen_hashes:
+                            is_dup = True
+                        else:
+                            seen_hashes.add(img_hash)
+
+                    if not is_dup:
+                        unique_items.append(item)
+
+                self._scan_queue.put(("DONE", all_items, unique_items))
             except Exception as e:
                 self._scan_queue.put(("ERROR", str(e)))
 
         threading.Thread(target=_worker, daemon=True).start()
         self._check_scan_queue()
 
+    def _update_active_covers(self):
+        """Updates cached covers and thumbnails based on the deduplication toggle."""
+        use_dedup = self.dedup_switch.get() if hasattr(self, "dedup_switch") else True
+        items = self.unique_items if (use_dedup and self.unique_items) else self.all_items
+
+        self.cached_covers = [x["cover"] for x in items]
+        self.cached_thumbnails = [x["thumb"] for x in items]
+
+        if hasattr(self, "status_badge") and self.all_items:
+            dup_count = len(self.all_items) - len(self.unique_items)
+            if use_dedup and dup_count > 0:
+                self.status_badge.configure(
+                    text=f"Loaded {len(self.all_items)} songs • {len(self.unique_items)} unique albums ({dup_count} duplicates skipped)",
+                    text_color="#80CBC4"
+                )
+            else:
+                self.status_badge.configure(
+                    text=f"Loaded {len(self.all_items)} songs (all covers included)",
+                    text_color="#80CBC4"
+                )
+
+    def _on_dedup_toggled(self):
+        """Triggered when the user flips the deduplication toggle."""
+        self._update_active_covers()
+        if "Auto-Optimum" in self.preset_menu.get():
+            r, c = calculate_optimal_grid(len(self.cached_covers), target_aspect=1.0)
+            self._set_grid_entries(r, c)
+
+        label = "ALBUMS" if self.dedup_switch.get() else "TRACKS"
+        if "{N}" in self.hub_sub_entry.get() or "TRACKS" in self.hub_sub_entry.get() or "ALBUMS" in self.hub_sub_entry.get():
+            self.hub_sub_entry.delete(0, "end")
+            self.hub_sub_entry.insert(0, f"{len(self.cached_covers)} {label} • 700 MB CD-R")
+
+        self._request_preview_render()
+
     def _check_scan_queue(self):
         try:
             msg = self._scan_queue.get_nowait()
             status = msg[0]
             if status == "DONE":
-                _, items, covers, thumbnails = msg
-                self.loaded_items = items
-                self.cached_covers = covers
-                self.cached_thumbnails = thumbnails
-                self.status_badge.configure(
-                    text=f"Loaded {len(covers)} tracks with album art",
-                    text_color="#80CBC4" if covers else "#E57373"
-                )
-                self.btn_export_png.configure(state="normal" if covers else "disabled")
+                _, all_items, unique_items = msg
+                self.all_items = all_items
+                self.unique_items = unique_items
+                self.btn_export_png.configure(state="normal" if all_items else "disabled")
+                self._update_active_covers()
 
                 # Auto update grid dimensions if on Auto-Optimum
                 if "Auto-Optimum" in self.preset_menu.get():
-                    r, c = calculate_optimal_grid(len(covers), target_aspect=1.0)
+                    r, c = calculate_optimal_grid(len(self.cached_covers), target_aspect=1.0)
                     self._set_grid_entries(r, c)
 
-                # Update default hub subtitle with song count
-                if "{N}" in self.hub_sub_entry.get() or "TRACKS" in self.hub_sub_entry.get():
+                # Update default hub subtitle with album/track count
+                label = "ALBUMS" if (hasattr(self, "dedup_switch") and self.dedup_switch.get()) else "TRACKS"
+                if "{N}" in self.hub_sub_entry.get() or "TRACKS" in self.hub_sub_entry.get() or "ALBUMS" in self.hub_sub_entry.get():
                     self.hub_sub_entry.delete(0, "end")
-                    self.hub_sub_entry.insert(0, f"{len(covers)} TRACKS • 700 MB CD-R")
+                    self.hub_sub_entry.insert(0, f"{len(self.cached_covers)} {label} • 700 MB CD-R")
 
                 self._request_preview_render()
             elif status == "ERROR":
