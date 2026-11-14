@@ -1,13 +1,13 @@
-# ==============================================================================
-# Spotify Downloader — Automated 1-Line Installer for Windows
-# Usage: irm https://raw.githubusercontent.com/mehuljain866/spotify-dl/main/install.ps1 | iex
+﻿# ==============================================================================
+# Red Spindle — Automated 1-Line Installer for Windows
+# Usage: irm https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.ps1 | iex
 # ==============================================================================
 
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "  ===========================================" -ForegroundColor Green
-Write-Host "     Spotify Downloader — Windows Installer  " -ForegroundColor Green
+Write-Host "        Red Spindle — Windows Installer      " -ForegroundColor Green
 Write-Host "  ===========================================" -ForegroundColor Green
 Write-Host ""
 
@@ -46,7 +46,7 @@ if (-not (Test-Path $pythonwExe)) {
 }
 
 # 2. Setup Destination Folder
-$installDir = "$env:USERPROFILE\spotify-dl"
+$installDir = "$env:USERPROFILE\redspindle"
 Write-Host "[*] Installing to: $installDir" -ForegroundColor Cyan
 
 if (-not (Test-Path $installDir)) {
@@ -59,27 +59,27 @@ if (Get-Command git -ErrorAction SilentlyContinue) {
     if (Test-Path "$installDir\.git") {
         git -C $installDir pull --quiet
     } else {
-        git clone --depth 1 https://github.com/mehuljain866/spotify-dl.git $installDir
+        git clone --depth 1 https://github.com/mehuljain866/redspindle.git $installDir
     }
 } else {
     Write-Host "[*] Downloading project archive..." -ForegroundColor Cyan
-    $zipUrl = "https://github.com/mehuljain866/spotify-dl/archive/refs/heads/main.zip"
-    $zipPath = "$env:TEMP\spotify-dl-main.zip"
+    $zipUrl = "https://github.com/mehuljain866/redspindle/archive/refs/heads/main.zip"
+    $zipPath = "$env:TEMP\redspindle-main.zip"
     Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath
-    Expand-Archive -Path $zipPath -DestinationPath "$env:TEMP\spotify-dl-extract" -Force
-    Copy-Item -Path "$env:TEMP\spotify-dl-extract\spotify-dl-main\*" -Destination $installDir -Recurse -Force
+    Expand-Archive -Path $zipPath -DestinationPath "$env:TEMP\redspindle-extract" -Force
+    Copy-Item -Path "$env:TEMP\redspindle-extract\redspindle-main\*" -Destination $installDir -Recurse -Force
     Remove-Item -Path $zipPath -Force -ErrorAction SilentlyContinue
-    Remove-Item -Path "$env:TEMP\spotify-dl-extract" -Recurse -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path "$env:TEMP\redspindle-extract" -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # 4. Install Dependencies
-Write-Host "[*] Installing required packages (CustomTkinter, yt-dlp, mutagen, spotapi)..." -ForegroundColor Cyan
+Write-Host "[*] Installing required packages (CustomTkinter, yt-dlp, mutagen, spotapi, pygame, cv2)..." -ForegroundColor Cyan
 & $pythonExe -m pip install -r "$installDir\requirements.txt" --quiet --upgrade
 
 # 5. Create Desktop Shortcut
 Write-Host "[*] Creating Desktop shortcut..." -ForegroundColor Cyan
 $desktopDir = [Environment]::GetFolderPath("Desktop")
-$shortcutPath = Join-Path $desktopDir "Spotify Downloader.lnk"
+$shortcutPath = Join-Path $desktopDir "Red Spindle.lnk"
 $iconPath = Join-Path $installDir "icon.ico"
 
 $wscript = New-Object -ComObject WScript.Shell
@@ -90,7 +90,7 @@ $shortcut.WorkingDirectory = $installDir
 if (Test-Path $iconPath) {
     $shortcut.IconLocation = $iconPath
 }
-$shortcut.Description = "Spotify Downloader"
+$shortcut.Description = "Red Spindle"
 $shortcut.Save()
 
 Write-Host ""
@@ -98,8 +98,8 @@ Write-Host "  ===========================================" -ForegroundColor Gree
 Write-Host "     Installation Complete Successfully!     " -ForegroundColor Green
 Write-Host "  ===========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Shortcut placed on your Desktop: 'Spotify Downloader'" -ForegroundColor Yellow
-Write-Host "  Launching Spotify Downloader now..." -ForegroundColor Cyan
+Write-Host "  Shortcut placed on your Desktop: 'Red Spindle'" -ForegroundColor Yellow
+Write-Host "  Launching Red Spindle now..." -ForegroundColor Cyan
 Write-Host ""
 
 Start-Process $pythonwExe -ArgumentList "`"$installDir\gui.py`"" -WorkingDirectory $installDir

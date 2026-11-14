@@ -1612,7 +1612,7 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                         m3u_lines = ["#EXTM3U\n"]
                         tracklist_lines = [
                             f"==================================================",
-                            f"  Spotify Downloader - Disc {disc_num}",
+                            f"  Red Spindle - Disc {disc_num}",
                             f"  Total Tracks: {len(disc['tracks'])}",
                             f"  Total Size  : {disc['total_mb']:.1f} MB / {disc['capacity_mb']:.0f} MB",
                             f"==================================================\n",

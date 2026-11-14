@@ -1061,7 +1061,7 @@ def embed_id3_metadata(
                 tags.add(TDRC(encoding=3, text=release[:10]))
             tags.add(COMM(
                 encoding=3, lang="eng", desc="Comment",
-                text="Downloaded with spotify-dl"
+                text="Downloaded with Red Spindle"
             ))
 
             if lyrics_text:
@@ -2237,7 +2237,7 @@ def main() -> None:
         return
 
     parser = argparse.ArgumentParser(
-        prog="spotify-dl",
+        prog="redspindle",
         description=(
             "Download songs from a Spotify playlist/album/track URL.\n"
             "Features smart incremental sync (only downloads new songs) and full\n"
@@ -2359,7 +2359,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="spotify-dl 2.1.0",
+        version="Red Spindle 2.2.0",
     )
 
     args = parser.parse_args()

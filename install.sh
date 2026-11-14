@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Spotify Downloader — Automated 1-Line Installer for macOS & Linux
-# Usage: curl -fsSL https://raw.githubusercontent.com/mehuljain866/spotify-dl/main/install.sh | bash
+# Red Spindle — Automated 1-Line Installer for macOS & Linux
+# Usage: curl -fsSL https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.sh | bash
 # ==============================================================================
 
 set -e
@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 
 echo ""
 echo -e "${GREEN}============================================${NC}"
-echo -e "${GREEN}   Spotify Downloader — macOS / Linux Setup ${NC}"
+echo -e "${GREEN}     Red Spindle — macOS / Linux Setup      ${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 
@@ -49,7 +49,7 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
 fi
 
 # 3. Setup Install Directory
-INSTALL_DIR="$HOME/.spotify-dl"
+INSTALL_DIR="$HOME/.redspindle"
 echo -e "${CYAN}[*] Installing to: $INSTALL_DIR...${NC}"
 mkdir -p "$INSTALL_DIR"
 
@@ -57,11 +57,11 @@ if command -v git >/dev/null 2>&1; then
     if [ -d "$INSTALL_DIR/.git" ]; then
         git -C "$INSTALL_DIR" pull --quiet
     else
-        git clone --depth 1 https://github.com/mehuljain866/spotify-dl.git "$INSTALL_DIR" --quiet
+        git clone --depth 1 https://github.com/mehuljain866/redspindle.git "$INSTALL_DIR" --quiet
     fi
 else
     echo -e "${CYAN}[*] Downloading repository archive...${NC}"
-    ARCHIVE_URL="https://github.com/mehuljain866/spotify-dl/archive/refs/heads/main.tar.gz"
+    ARCHIVE_URL="https://github.com/mehuljain866/redspindle/archive/refs/heads/main.tar.gz"
     curl -fsSL "$ARCHIVE_URL" | tar -xz -C "$INSTALL_DIR" --strip-components=1
 fi
 
@@ -71,45 +71,49 @@ echo -e "${CYAN}[*] Setting up virtual environment...${NC}"
 VENV_PIP="$INSTALL_DIR/venv/bin/pip"
 VENV_PY="$INSTALL_DIR/venv/bin/python"
 
-echo -e "${CYAN}[*] Installing dependencies (CustomTkinter, yt-dlp, mutagen, spotapi)...${NC}"
+echo -e "${CYAN}[*] Installing dependencies (CustomTkinter, yt-dlp, mutagen, spotapi, pygame, cv2)...${NC}"
 "$VENV_PIP" install --upgrade pip --quiet
 "$VENV_PIP" install -r "$INSTALL_DIR/requirements.txt" --quiet
 
-# 5. Create CLI command 'spotify-dl'
+# 5. Create CLI commands 'redspindle' & 'spotify-dl'
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
-cat << EOF > "$BIN_DIR/spotify-dl"
+cat << EOF > "$BIN_DIR/redspindle"
 #!/usr/bin/env bash
 exec "$VENV_PY" "$INSTALL_DIR/gui.py" "\$@"
 EOF
+chmod +x "$BIN_DIR/redspindle"
+
+# Keep backward-compatible alias
+cp "$BIN_DIR/redspindle" "$BIN_DIR/spotify-dl"
 chmod +x "$BIN_DIR/spotify-dl"
 
 # 6. Desktop Launcher creation
 if [ "$OS_TYPE" = "Darwin" ]; then
     # macOS: Create a .command launcher on Desktop
-    LAUNCHER="$HOME/Desktop/Spotify Downloader.command"
+    LAUNCHER="$HOME/Desktop/Red Spindle.command"
     cat << EOF > "$LAUNCHER"
 #!/usr/bin/env bash
 exec "$VENV_PY" "$INSTALL_DIR/gui.py"
 EOF
     chmod +x "$LAUNCHER"
-    echo -e "${GREEN}[+] Created Desktop launcher:${NC} ~/Desktop/Spotify Downloader.command"
+    echo -e "${GREEN}[+] Created Desktop launcher:${NC} ~/Desktop/Red Spindle.command"
 else
     # Linux: Create .desktop entry
     DESKTOP_ENTRY_DIR="$HOME/.local/share/applications"
     mkdir -p "$DESKTOP_ENTRY_DIR"
-    cat << EOF > "$DESKTOP_ENTRY_DIR/spotify-dl.desktop"
+    cat << EOF > "$DESKTOP_ENTRY_DIR/redspindle.desktop"
 [Desktop Entry]
-Name=Spotify Downloader
-Comment=Download Spotify tracks and playlists with full tags & cover art
+Name=Red Spindle
+Comment=High-fidelity music downloader, iPod tag harmonizer & CD burn studio
 Exec=$VENV_PY $INSTALL_DIR/gui.py
 Icon=$INSTALL_DIR/icon.ico
 Terminal=false
 Type=Application
 Categories=AudioVideo;Audio;
 EOF
-    chmod +x "$DESKTOP_ENTRY_DIR/spotify-dl.desktop"
-    echo -e "${GREEN}[+] Created desktop entry:${NC} Spotify Downloader (available in application launcher)"
+    chmod +x "$DESKTOP_ENTRY_DIR/redspindle.desktop"
+    echo -e "${GREEN}[+] Created desktop entry:${NC} Red Spindle (available in application launcher)"
 fi
 
 echo ""
@@ -117,8 +121,8 @@ echo -e "${GREEN}============================================${NC}"
 echo -e "${GREEN}   Installation Complete!                   ${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
-echo -e "Run via terminal:  ${YELLOW}spotify-dl${NC}  (ensure ~/.local/bin is in your PATH)"
-echo -e "Launching Spotify Downloader now..."
+echo -e "Run via terminal:  ${YELLOW}redspindle${NC}  (ensure ~/.local/bin is in your PATH)"
+echo -e "Launching Red Spindle now..."
 echo ""
 
 nohup "$VENV_PY" "$INSTALL_DIR/gui.py" >/dev/null 2>&1 &

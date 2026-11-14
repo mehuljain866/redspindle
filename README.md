@@ -1,7 +1,7 @@
-# Spotify Downloader
+# Red Spindle
 
 <p align="center">
-  <img src="assets/icon.png" alt="Spotify Downloader Icon" width="120" height="120" />
+  <img src="assets/icon.png" alt="Red Spindle Icon" width="120" height="120" />
 </p>
 
 <p align="center">
@@ -12,48 +12,48 @@
   <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
 </p>
 
-A fast, modern desktop music downloader and library manager engineered specifically for **Apple Music, iTunes, and iPod users** as well as **physical CD burning enthusiasts**. Downloads entire Spotify playlists, albums, and tracks with **zero split albums** on iOS/iPods, embedded synchronized lyrics you can tap to read, pristine high-res album covers, and complete ID3 tags.
+A fast, modern desktop music downloader, iPod library harmonizer, and physical CD studio engineered for **Apple Music, iTunes, and iPod users** as well as **CD burning & disc art enthusiasts**. Downloads Spotify playlists, albums, and tracks with **zero split albums** on iOS/iPods, embedded synchronized lyrics, pristine high-resolution album artwork, smart disc-capacity curation, and 1:1 scale printable disc stickers.
 
 <p align="center">
-  <img src="assets/screenshot.png" alt="Spotify Downloader" width="550" />
+  <img src="assets/screenshot.png" alt="Red Spindle" width="550" />
 </p>
 
 ---
 
 ## 1-Line Quick Install
 
-Install and launch **Spotify Downloader** with a single command:
+Install and launch **Red Spindle** with a single command:
 
 ### Windows (PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/mehuljain866/spotify-dl/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.ps1 | iex
 ```
 
 ### macOS / Linux (Terminal)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mehuljain866/spotify-dl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.sh | bash
 ```
 
 ---
 
 ## Single-File Standalone Downloads (No Python Required)
 
-Prefer a portable single-file app without installing Python? Download from [**Latest Releases**](https://github.com/mehuljain866/spotify-dl/releases/latest):
+Prefer a portable single-file app without installing Python? Download from [**Latest Releases**](https://github.com/mehuljain866/redspindle/releases/latest):
 
 | Platform | File | How to Run |
 |----------|------|------------|
-| **Windows** | `Spotify-Downloader-Windows.exe` | Double-click to run directly |
-| **Linux** | `Spotify-Downloader-Linux` | `chmod +x Spotify-Downloader-Linux && ./Spotify-Downloader-Linux` |
-| **macOS** | `Spotify-Downloader-macOS.zip` | Unzip and open `Spotify Downloader.app` |
+| **Windows** | `RedSpindle-Windows.exe` | Double-click to run directly |
+| **Linux** | `RedSpindle-Linux` | `chmod +x RedSpindle-Linux && ./RedSpindle-Linux` |
+| **macOS** | `RedSpindle-macOS.zip` | Unzip and open `Red Spindle.app` |
 
 ---
 
 ## Built for Apple Music, iTunes, and iPods
 
-Most generic music downloaders create major headaches when importing into iTunes, Apple Music, or syncing to an iPod. **Spotify Downloader** solves these issues out of the box:
+Most generic music downloaders create major headaches when importing into iTunes, Apple Music, or syncing to an iPod. **Red Spindle** solves these issues out of the box:
 
-- **Zero Split Albums (Unified Album Artist)**: On Apple Music and iPods, albums with guest features (e.g. Gorillaz feat. Snoop Dogg) notoriously splinter into multiple separate 1-song albums. Spotify Downloader automatically unifies the `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) across every track so albums stay intact under one unified album card.
-- **Embedded Synchronized Lyrics for iOS and iPod**: External `.lrc` files are completely ignored by Apple Music and iPods. Spotify Downloader queries LRCLIB and embeds lyrics directly into the audio metadata (`USLT` for MP3, `©lyr` for M4A). On your iPhone or iPod touch (iOS 7 through iOS 18), tap the album artwork while playing to reveal the synchronized lyrics overlay.
+- **Zero Split Albums (Unified Album Artist)**: On Apple Music and iPods, albums with guest features (e.g. Gorillaz feat. Snoop Dogg) notoriously splinter into multiple separate 1-song albums. Red Spindle automatically unifies the `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) across every track so albums stay intact under one unified album card.
+- **Embedded Synchronized Lyrics for iOS and iPod**: External `.lrc` files are completely ignored by Apple Music and iPods. Red Spindle queries LRCLIB and embeds lyrics directly into the audio metadata (`USLT` for MP3, `©lyr` for M4A). On your iPhone or iPod touch (iOS 7 through iOS 18), tap the album artwork while playing to reveal the synchronized lyrics overlay.
 - **iPod-Optimized 640x640 Artwork**: Oversized, interlaced, or progressive cover images cause lag, memory crashes, or black squares on vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Every track receives a clean, standardized 640&times;640 baseline JPEG cover that loads instantly.
 - **Official Apple Advisory Badges**: Injects iTunes `rtng` advisory metadata so your tracks display official `[E]` (Explicit) or `[Clean]` badges in Apple Music and iTunes.
 - **100% Lossless Existing Library Fixer**: Already have a huge music folder plagued by split albums? Click **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to harmonize your entire collection in seconds without re-compressing the audio.
@@ -77,7 +77,7 @@ Most generic music downloaders create major headaches when importing into iTunes
 - **Consolidates Split Albums (Apple Music / iTunes)**: Prevents albums with guest singers (e.g. Gorillaz feat. Snoop Dogg) from splitting into multiple separate 1-song albums on Apple Music and iOS. Unifies `Album Artist` (`TPE2` / `aART`) while keeping individual track artist credits. Includes a 100% lossless repair tool for existing libraries.
 - **Audio Downsizing and Storage Optimizer**: Downsize existing music files to 128k, 160k, or 192k to save massive storage space (up to 60% reduction) with a smart filter that only suggests bitrates lower than your current files. Preserves 100% of ID3 metadata and album art.
 - **Simple and Clean UI**: Enter or paste a link, pick your folder, choose your settings, click **Start Download**, and watch real-time progress.
-- **Desktop Shortcut**: Double-click the **Spotify Downloader** icon on your Desktop to launch directly without opening a terminal.
+- **Desktop Shortcut**: Double-click the **Red Spindle** icon on your Desktop to launch directly without opening a terminal.
 - **Unlimited Playlist Length**: Handles playlists with 100, 200, 500+ tracks automatically without capping or truncation.
 - **Smart Incremental Sync**: Use the same folder again and again. If your playlist has 150 songs and you add 5 new ones, it skips the 145 existing songs in seconds and downloads only the new ones.
 - **Embedded High-Resolution Album Art**: Injects 640×640 album artwork directly into every audio file.
@@ -89,7 +89,7 @@ Most generic music downloaders create major headaches when importing into iTunes
 
 ## Running the Desktop App
 
-1. **From your Desktop**: Double-click the **Spotify Downloader** shortcut.
+1. **From your Desktop**: Double-click the **Red Spindle** shortcut.
 2. **From Terminal**:
    ```powershell
    python gui.py
@@ -148,7 +148,7 @@ python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode cle
 
 ## Explicit vs Clean Audio and Lyrics Management
 
-Spotify Downloader gives you full control over whether to download uncensored explicit tracks or radio edits, and automatically embeds synchronized lyrics into your files for Apple Music and iOS.
+Red Spindle gives you full control over whether to download uncensored explicit tracks or radio edits, and automatically embeds synchronized lyrics into your files for Apple Music and iOS.
 
 <p align="center">
   <img src="assets/screenshot-explicit.png" alt="Explicit and Clean Audio / Lyrics Manager" width="550" />
@@ -225,7 +225,7 @@ If you download an album with featured guest artists (such as Gorillaz' *Plastic
 
 Apple Music and iOS organize albums by the **Album Artist** tag (`TPE2` in MP3, `aART` in M4A, `albumartist` in FLAC). If an album only has the individual track artist filled in (e.g. `Gorillaz feat. Snoop Dogg`) and the Album Artist is blank or inconsistent, Apple Music treats every unique guest combination as a completely different album.
 
-### How Spotify Downloader Solves This
+### How Red Spindle Solves This
 
 - **Automatic for New Downloads**: All new downloads automatically set the primary artist as the unified `Album Artist` while preserving the full guest list in the song title and artist tags.
 - **100% Lossless Consolidation for Existing Music**:
@@ -264,13 +264,13 @@ If your music library occupies too much storage space (e.g. downloaded at 320 kb
    python spotify_dl.py --downsize "C:\Users\mehul\Music\Spotify Downloads" --bitrate 192k
    ```
 
-> **Note on Upgrading Audio Quality**: Re-encoding lower-bitrate audio files to higher bitrates cannot restore lost frequencies. To truly upgrade lower-bitrate tracks to maximum quality (e.g. 320 kbps), check **Overwrite existing tracks (force re-download)** in the main window and click **Start Download** — Spotify Downloader will re-fetch the best available source streams via YouTube / YouTube Music matched against official Spotify metadata.
+> **Note on Upgrading Audio Quality**: Re-encoding lower-bitrate audio files to higher bitrates cannot restore lost frequencies. To truly upgrade lower-bitrate tracks to maximum quality (e.g. 320 kbps), check **Overwrite existing tracks (force re-download)** in the main window and click **Start Download** — Red Spindle will re-fetch the best available source streams via YouTube / YouTube Music matched against official Spotify metadata.
 
 ---
 
 ## CD Burn Preparation and Smart Disc Splitting
 
-If you have a large library of downloaded songs and want to burn them onto standard 700 MB CD-Rs (such as Moser Baer white discs) or DVDs, Spotify Downloader includes an interactive "Tinder-style" curation and smart disc-splitting tool:
+If you have a large library of downloaded songs and want to burn them onto standard 700 MB CD-Rs (such as Moser Baer white discs) or DVDs, Red Spindle includes an interactive "Tinder-style" curation and smart disc-splitting tool:
 
 <p align="center">
   <img src="assets/screenshot-cd-prep.png" alt="CD Burn Prep and Song Curator" width="550" />

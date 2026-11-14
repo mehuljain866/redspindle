@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gui.py — Modern GUI for Spotify Downloader
+gui.py — Modern GUI for Red Spindle
 Built with CustomTkinter. Provides a clean, simple interface to download
 Spotify songs/playlists with full metadata, album art, and progress tracking.
 """
@@ -65,7 +65,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         ctk.set_appearance_mode("dark")
         ctk.set_default_color_theme("green")
 
-        self.title("Spotify Downloader")
+        self.title("Red Spindle")
         self.geometry("680x770")
         self.minsize(620, 680)
 
@@ -150,7 +150,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         # Header Title
         title_label = ctk.CTkLabel(
             main_frame,
-            text="Spotify Downloader",
+            text="Red Spindle",
             font=ctk.CTkFont(size=22, weight="bold"),
             text_color="#1DB954",
         )
@@ -158,7 +158,7 @@ class SpotifyDownloaderApp(ctk.CTk):
 
         subtitle_label = ctk.CTkLabel(
             main_frame,
-            text="Download songs, albums, and playlists with album art & tags",
+            text="High-fidelity music downloader, iPod tag harmonizer & CD burn studio",
             font=ctk.CTkFont(size=12),
             text_color="gray70",
         )

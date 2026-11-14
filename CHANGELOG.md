@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Parallelized disc folder generation (`ThreadPoolExecutor`) in CD Burn Prep, reducing export times for 100–200 tracks by up to 5x.
 
 ### Changed
+- **Project Rebrand**: Rebranded project to **Red Spindle** (a tribute to the 1980 Philips/Sony Red Book CD-DA audio standard and physical disc spindles) to reflect its evolution into a full-featured music curation, iPod synchronization, and physical disc studio.
 - Reorganized main window toolbar into dedicated rows for General Audio Maintenance and CD / Artwork Tools.
 - Clarified audio pipeline in documentation: accurately states that high-fidelity audio streams are fetched via YouTube / YouTube Music matched against official Spotify metadata.
 
