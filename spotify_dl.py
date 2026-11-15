@@ -2359,7 +2359,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="Red Spindle 2.2.0",
+        version="Red Spindle 2.2.1",
     )
 
     args = parser.parse_args()

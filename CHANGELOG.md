@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.1] - 2026-11-15
+
+### Changed
+- **Neutralized Metadata & Tagging Terminology**:
+  - Rephrased split-album repair around the universal `Album Artist` (`TPE2` / `aART` / `albumartist`) standard rather than Apple-specific framing, explaining grouping behavior across Windows Media Player, Android players (Poweramp/Musicolet), VLC, and Apple Music.
+  - Clarified open-standard `.lrc` companion files for universal players alongside embedded container tags (`USLT` / `©lyr` / `lyrics`) for closed players.
+  - Reframed artwork embedding to hardware-compatible baseline JPEG 640&times;640 across vintage DAPs, click-wheel iPods, and in-car systems.
+- **UI & CLI Copy Updates**:
+  - Main window subtitle updated to *"High-fidelity music downloader, metadata harmonizer & CD burn studio"*.
+  - Dialog checkboxes explicitly state *"Fetch lyrics (.lrc file & embedded tags)"* and *"Fetch lyrics (standard .lrc file & embedded tags)"*.
+  - CLI banner and help flags generalized to media library tag repair.
+- **Multi-Platform Release Packaging**:
+  - Standardized release executable names to `RedSpindle-Windows.exe`, `RedSpindle-Linux`, and `RedSpindle-macOS.zip` (while retaining `Spotify-Downloader-*` compatibility aliases).
+
+---
+
 ## [2.2.0] - 2026-11-14
 
 ### Added
