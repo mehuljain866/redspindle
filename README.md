@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/Apple%20Music-100%25%20Ready-FA2D48?style=flat&logo=apple-music&logoColor=white" alt="Apple Music Ready" /></a>
-  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/iPod-Classic%20%7C%20Nano%20%7C%20Touch-888888?style=flat&logo=apple&logoColor=white" alt="iPod Compatible" /></a>
-  <a href="#built-for-apple-music-itunes-and-ipods"><img src="https://img.shields.io/badge/iTunes-Sync%20Optimized-E74C3C?style=flat&logo=itunes&logoColor=white" alt="iTunes Sync Ready" /></a>
+  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Metadata-Universal%20ID3v2-007ACC?style=flat" alt="Universal ID3v2" /></a>
+  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/WMP%20%26%20Apple%20Music-Split--Album%20Fix-FA2D48?style=flat" alt="Split-Album Fix" /></a>
+  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/iPod-Classic%20%7C%20Nano%20%7C%20Touch-888888?style=flat&logo=apple&logoColor=white" alt="iPod Compatible" /></a>
   <a href="#cd-burn-preparation-and-smart-disc-splitting"><img src="https://img.shields.io/badge/CD--R%20Burn-Smart%20Packing-E65100?style=flat" alt="CD-R Smart Packing" /></a>
   <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
 </p>
@@ -48,15 +48,15 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 ---
 
-## Built for Apple Music, iTunes, and iPods
+## Library Tagging and Player Compatibility
 
-Importing downloads into iTunes, Apple Music, or syncing to an iPod often introduces tagging and display problems. Red Spindle addresses these directly:
+Most media players—including Windows Media Player, Apple Music, iTunes, and mobile apps—organize collections using metadata tags. Red Spindle structures tags to avoid common grouping and display issues:
 
-- **Unified Album Artist (Prevents Split Albums)**: On Apple Music and iPods, tracks with guest artists (for example, Gorillaz featuring Snoop Dogg) often separate into multiple 1-song albums. Red Spindle sets a unified `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) while keeping individual track artist credits, keeping albums intact.
-- **Embedded Lyrics for Players Without Sidecar Support**: While standard players use separate `.lrc` files, Apple Music and iPods only display lyrics embedded directly in file metadata (`USLT` for MP3, `©lyr` for M4A). Red Spindle embeds these tags so tapping the album artwork on iOS 7–18 shows the lyrics.
-- **iPod-Compatible 640x640 Artwork**: Progressive or high-resolution JPEGs can crash vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Covers are saved as standard 640&times;640 baseline JPEGs.
-- **Advisory Badges**: Adds iTunes `rtng` advisory metadata so tracks show official `[E]` (Explicit) or `[Clean]` badges in Apple Music and iTunes.
-- **Library Tag Repair Tool**: Click **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to fix Album Artist tags across existing folders without re-encoding audio.
+- **Unified Album Artist (Prevents Split Albums)**: When songs feature guest artists (for example, *Gorillaz feat. Snoop Dogg*), media players lacking a unified `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) separate the release into multiple 1-song albums. Red Spindle sets a consistent `Album Artist` while preserving track-level performer credits.
+- **Dual-Layer Lyrics (.lrc and Embedded Tags)**: Standard players read external `.lrc` files, while closed players (like Apple Music and car stereos) only read internal container tags (`USLT` for MP3, `©lyr` for M4A). Red Spindle provides both.
+- **iPod-Compatible 640x640 Artwork**: Progressive or high-resolution JPEGs can crash click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Covers are saved as standard 640&times;640 baseline JPEGs.
+- **Content Advisory Badges**: Adds `rtng` metadata so explicit and clean radio tracks display `[E]` or `[Clean]` tags in supporting players.
+- **Library Tag Repair**: Use **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to update grouping tags across existing files without re-encoding audio.
 
 ---
 
@@ -217,31 +217,37 @@ python spotify_dl.py --update-explicit "C:\Users\mehul\Music\Spotify Downloads" 
 
 ---
 
-## Apple Music and iTunes Album Grouping (Fix Split Albums)
+## Library Organization: Fixing Split Albums (Album Artist Tagging)
 
-If you download an album with featured guest artists (such as Gorillaz' *Plastic Beach* featuring Snoop Dogg, Bobby Womack, or Little Dragon) and sync it to Apple Music or iOS, the album may appear "fragmented" across your library as multiple separate album tiles with 1 or 2 songs each.
+When downloading an album where individual tracks feature guest performers (such as *Gorillaz feat. Snoop Dogg*), media players often fragment the release into separate 1-song or 2-song albums.
 
-### Why Albums Split in Apple Music
+<p align="center">
+  <img src="assets/screenshot-split-albums.png" alt="Fix Split Albums Tool" width="550" />
+</p>
 
-Apple Music and iOS organize albums by the **Album Artist** tag (`TPE2` in MP3, `aART` in M4A, `albumartist` in FLAC). If an album only has the individual track artist filled in (e.g. `Gorillaz feat. Snoop Dogg`) and the Album Artist is blank or inconsistent, Apple Music treats every unique guest combination as a completely different album.
+### Why Media Players Split Albums
 
-### How Red Spindle Solves This
+Audio formats provide two separate artist metadata fields:
+* **Artist** (`TPE1` in MP3, `©ART` in M4A): The specific performer(s) on a single track.
+* **Album Artist** (`TPE2` in MP3, `aART` in M4A, `albumartist` in FLAC): The primary artist or group credited with the overall release.
 
-- **Automatic for New Downloads**: All new downloads automatically set the primary artist as the unified `Album Artist` while preserving the full guest list in the song title and artist tags.
-- **100% Lossless Consolidation for Existing Music**:
-  - **In the Desktop App**: In the Download Folder card, click **Fix Split Albums...** and click **Scan & Fix Album Tags**.
+Media library managers—including Windows Media Player, iTunes, Apple Music, and mobile apps—index albums by pairing the album title with the `Album Artist`. If `Album Artist` is blank, players fall back to the track `Artist`. When featured guests differ across tracks, the player interprets each guest combination as a distinct artist, scattering the album into separate entries.
+
+### How Red Spindle Fixes This
+
+- **Automatic on Download**: All new downloads set the primary artist as the unified `Album Artist` while preserving guest credits in track titles and artist tags.
+- **Lossless Tag Repair for Existing Libraries**:
+  - **In the Desktop App**: In the **Download Folder** card, click **Fix Split Albums...** and select **Scan & Fix Album Tags**.
   - **In the Terminal (CLI)**:
     ```powershell
     python spotify_dl.py --fix-tags "C:\Users\mehul\Music\Spotify Downloads"
     ```
-  - This scans your music files and harmonizes the `Album Artist` tag across all tracks belonging to the same album. The audio stream is not transcoded or re-compressed; only the ID3 grouping tags are updated.
+  This scans audio files and sets a uniform `Album Artist` tag across each album folder. Audio streams are untouched; only metadata is updated.
 
-### Syncing to iPhone and iOS Devices
+### Player-Specific Refresh Notes
 
-After downloading or running the album consolidation tool:
-1. Open iTunes or Apple Music on your computer.
-2. If the files were already in your iTunes library, right-click the songs and choose **Get Info**, then click **OK** to let iTunes refresh its tag cache.
-3. Sync your iPhone or iPod. All songs will now appear grouped together under a single, unified album cover.
+* **Windows Media Player / Media Player**: Automatically detects updated `TPE2` tags and regroups the tracks under a single album tile.
+* **Apple Music & iTunes**: If songs were already imported, select the affected tracks in iTunes or Apple Music, open **Get Info** (`Ctrl + I` on Windows, `Cmd + I` on macOS), and click **OK** to force the app to reload its metadata cache. Then re-sync your iPhone or iPod.
 
 ---
 
@@ -312,13 +318,14 @@ If you have a large library of downloaded songs and want to burn them onto stand
 
 Once your songs are curated or burned, generate high-resolution printable circular CD stickers (120 mm) or square/rectangular artwork collages with the built-in **CD & Grid Art Studio**:
 
-<p align="center">
-  <img src="assets/screenshot-cd-art.png" alt="CD Sticker and Grid Art Studio" width="700" />
-</p>
+| **Style 1: Curved Polar Fan** | **Style 2: Concentric Tiles** | **Style 3: Any-by-Any Grid** |
+| :---: | :---: | :---: |
+| <img src="assets/screenshot-art-curved.png" alt="Style 1: Curved Polar Fan" width="300" /> | <img src="assets/screenshot-art-tiles.png" alt="Style 2: Concentric Tiles" width="300" /> | <img src="assets/screenshot-art-grid.png" alt="Style 3: Any-by-Any Grid" width="300" /> |
+| Full-bleed circular wedges scaling to disc rim | Square tiles rotated along concentric rings | Configurable R &times; C grid for jewel cases |
 
 <p align="center">
   <img src="assets/cd-player.gif" alt="Printed CD Sticker in Action" width="320" /><br />
-  <em>Real-world result: 1:1 true-to-scale printed CD sticker loaded into a physical CD player tray.</em>
+  <em>Printed 1:1 scale disc sticker loaded in a CD player tray.</em>
 </p>
 
 ### Layout Styles

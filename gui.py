@@ -1371,7 +1371,7 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
     def __init__(self, parent: ctk.CTk, default_folder: Path):
         super().__init__(parent)
 
-        self.title("Fix Split Albums (Apple Music / iTunes)")
+        self.title("Fix Split Albums (Album Artist Tag Unification)")
         self.geometry("640x520")
         self.minsize(580, 460)
         self.transient(parent)
@@ -1438,7 +1438,7 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         # Header
         title = ctk.CTkLabel(
             container,
-            text="Fix Split Albums for Apple Music & iOS",
+            text="Fix Split Albums (Album Artist Tag Unification)",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#CE93D8",
             anchor="w",
@@ -1447,7 +1447,7 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
 
         subtitle = ctk.CTkLabel(
             container,
-            text="Unifies Album Artist tags so albums with featured singers (e.g. Gorillaz feat. Snoop Dogg)\nstay grouped into a single album in Apple Music and iTunes. 100% lossless (no audio re-encoding).",
+            text="Unifies Album Artist tags so albums with featured singers (e.g. Gorillaz feat. Snoop Dogg)\nstay grouped across Windows Media Player, Apple Music, and mobile libraries. Lossless.",
             font=ctk.CTkFont(size=11),
             text_color="gray70",
             justify="left",
