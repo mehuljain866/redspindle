@@ -6,13 +6,13 @@
 
 <p align="center">
   <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Metadata-Universal%20ID3v2-007ACC?style=flat" alt="Universal ID3v2" /></a>
-  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/WMP%20%26%20Apple%20Music-Split--Album%20Fix-FA2D48?style=flat" alt="Split-Album Fix" /></a>
-  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/iPod-Classic%20%7C%20Nano%20%7C%20Touch-888888?style=flat&logo=apple&logoColor=white" alt="iPod Compatible" /></a>
+  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Split--Album%20Fix-Universal%20TPE2-FA2D48?style=flat" alt="Split-Album Fix" /></a>
+  <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Lyrics-.lrc%20%2B%20Embedded-2E7D32?style=flat" alt="Lyrics .lrc + Embedded" /></a>
   <a href="#cd-burn-preparation-and-smart-disc-splitting"><img src="https://img.shields.io/badge/CD--R%20Burn-Smart%20Packing-E65100?style=flat" alt="CD-R Smart Packing" /></a>
   <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
 </p>
 
-Downloads Spotify playlists, albums, and tracks with ID3 metadata, album artwork, and synchronized lyrics. Generates standard `.lrc` files and embedded tags, prevents split albums on Apple Music and iPods, curates songs for 700 MB CD-Rs, and creates 1:1 scale printable disc stickers.
+Downloads Spotify playlists, albums, and tracks with ID3 metadata, album artwork, and synchronized lyrics. Generates standard `.lrc` files and embedded tags, prevents split albums across media libraries, curates songs for 700 MB CD-Rs, and creates 1:1 scale printable disc stickers.
 
 <p align="center">
   <img src="assets/screenshot.png" alt="Red Spindle" width="550" />
@@ -54,7 +54,7 @@ Most media players—including Windows Media Player, Apple Music, iTunes, and mo
 
 - **Unified Album Artist (Prevents Split Albums)**: When songs feature guest artists (for example, *Gorillaz feat. Snoop Dogg*), media players lacking a unified `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) separate the release into multiple 1-song albums. Red Spindle sets a consistent `Album Artist` while preserving track-level performer credits.
 - **Dual-Layer Lyrics (.lrc and Embedded Tags)**: Standard players read external `.lrc` files, while closed players (like Apple Music and car stereos) only read internal container tags (`USLT` for MP3, `©lyr` for M4A). Red Spindle provides both.
-- **iPod-Compatible 640x640 Artwork**: Progressive or high-resolution JPEGs can crash click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Covers are saved as standard 640&times;640 baseline JPEGs.
+- **Hardware-Compatible 640x640 Artwork**: Progressive or oversized JPEG encodings cause decoding lag and memory errors on older hardware players, classic click-wheel iPods, and in-car systems. Covers are encoded as standard 640&times;640 baseline JPEGs.
 - **Content Advisory Badges**: Adds `rtng` metadata so explicit and clean radio tracks display `[E]` or `[Clean]` tags in supporting players.
 - **Library Tag Repair**: Use **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to update grouping tags across existing files without re-encoding audio.
 
@@ -63,7 +63,7 @@ Most media players—including Windows Media Player, Apple Music, iTunes, and mo
 ## Features
 
 - **Parallel Downloads**: Downloads 4 to 6 songs concurrently. Configurable in GUI and CLI.
-- **iPod and Apple Music Ready**: Native embedded lyrics, unified Album Artist tags (no split albums), and iTunes advisory ratings out of the box.
+- **Universal Library & Tag Standards**: Native embedded lyrics, companion .lrc sidecars, unified Album Artist tags (prevents split albums), and standard content advisory metadata.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
 - **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes SDL2 playback, album art display, session auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded export (`ThreadPoolExecutor`), and optional compression (192k/128k).
 - **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
@@ -71,10 +71,10 @@ Most media players—including Windows Media Player, Apple Music, iTunes, and mo
   2. *Floating Concentric Tiles*: Tangentially rotated unwarped square covers arranged in concentric rings over a dark circular background.
   3. *Any-by-Any Grid*: Auto-optimum or custom $R \times C$ grids for CD jewel case front covers (120x120mm), back tray inserts (150x118mm), posters, and wallpapers with custom tile spacing and corner rounding.
   Includes interactive live preview, custom center hub typography, 15mm/40mm spindle cutouts, cutting guides, 1:1 scale printable A4 sheets, and 1-click clipboard copy.
-- **Synchronized Lyrics (.lrc and Embedded Tags)**: Fetches synced lyrics from LRCLIB and writes standard timestamped `.lrc` files alongside each song for players that read sidecar files (Android apps, desktop players, DAPs). Also embeds lyrics into metadata tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC) for Apple Music and iTunes.
+- **Synchronized Lyrics (.lrc and Embedded Tags)**: Fetches synced lyrics from LRCLIB and writes standard timestamped `.lrc` files alongside each song for players that read sidecar files (Android apps, desktop players, DAPs). Also embeds lyrics into metadata tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC) for closed players like Apple Music and car stereos.
 - **Hindi and Hinglish Lyrics Transliteration**: Choose between Romanized Hinglish (Hindi words in English alphabet for easy singing along), native Devanagari Hindi script, or unmodified database original. Built-in transliteration intelligently converts Devanagari lyrics and timestamps to Latin characters.
-- **Official iTunes Advisory Badges**: Tags songs with Apple Music advisory ratings (`[E]` for Explicit uncensored and `[Clean]` for clean radio edits).
-- **Consolidates Split Albums (Apple Music / iTunes)**: Prevents albums with guest singers (e.g. Gorillaz feat. Snoop Dogg) from splitting into multiple separate 1-song albums on Apple Music and iOS. Unifies `Album Artist` (`TPE2` / `aART`) while keeping individual track artist credits. Includes a 100% lossless repair tool for existing libraries.
+- **Content Advisory Ratings**: Writes standard advisory metadata (`[E]` for explicit uncensored, `[Clean]` for radio edits) recognized by mobile and desktop players.
+- **Consolidates Split Albums**: Prevents albums with guest artists (e.g. Gorillaz feat. Snoop Dogg) from splitting into multiple separate 1-song albums across media libraries. Unifies `Album Artist` (`TPE2` / `aART`) while keeping individual track artist credits. Includes a lossless repair tool for existing libraries.
 - **Audio Downsizing**: Converts existing library tracks to 128k, 160k, or 192k to reduce file size while preserving ID3 tags and album artwork. The selector only lists bitrates lower than your source files.
 - **Simple and Clean UI**: Enter or paste a link, pick your folder, choose your settings, click **Start Download**, and watch real-time progress.
 - **Desktop Shortcut**: Double-click the **Red Spindle** icon on your Desktop to launch directly without opening a terminal.
@@ -118,7 +118,7 @@ python spotify_dl.py https://open.spotify.com/playlist/<id> -o "C:\Music\MyPlayl
 # Downsize all songs in a folder to save storage (e.g. 192k or 128k):
 python spotify_dl.py --downsize "C:\Music\MyPlaylist" --bitrate 192k
 
-# Fix fragmented/split albums for Apple Music and iTunes:
+# Fix fragmented/split albums across your music library:
 python spotify_dl.py --fix-tags "C:\Music\MyPlaylist"
 
 # Update an existing music folder to Clean radio edits and embed lyrics:
@@ -139,7 +139,7 @@ python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode cle
 | `--force` | Re-download songs even if already present | `False` |
 | `--limit` | Limit download to first N tracks | `None` (all) |
 | `--downsize` | Downsize/transcode all songs in a folder to target bitrate | `None` |
-| `--fix-tags` | Fix fragmented albums for iTunes/Apple Music by unifying Album Artist | `None` |
+| `--fix-tags` | Fix fragmented albums across media libraries by unifying Album Artist | `None` |
 | `--update-explicit` | Update existing songs in a folder to Explicit or Clean audio/lyrics | `None` |
 | `--no-redownload` | When updating explicit mode, only update tags/lyrics without re-downloading audio | `False` |
 | `--cd-prep` | Launch interactive CD Burn Prep & Song Curator tool | `False` |
@@ -196,7 +196,7 @@ If you already downloaded songs and want to switch them between Explicit and Cle
 
 - **Universal `.lrc` Files**: Generates a standard timestamped `.lrc` file alongside every track. Supported by Android music players (Poweramp, Musicolet, Retro Music), desktop players (Foobar2000, VLC, AIMP), and dedicated DAP media players for scrolling synchronized lyrics.
 - **Embedded Tag Support**: Simultaneously embeds lyrics directly into audio metadata (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC). This allows players that do not read external sidecar files (such as Apple Music, iTunes, classic iPods, and in-car head units) to display lyrics.
-- **Viewing on iPhone/iPod**: Open the Music app on iOS (iOS 7.1.2 through iOS 18), play a song, and tap the album cover on the player screen to show the lyrics overlay.
+- **Viewing Lyrics Across Devices**: Android and desktop audio players (Poweramp, VLC, Foobar2000) scroll lyrics automatically using the companion `.lrc` file. On Apple Music / iOS, tapping the player album art reveals the embedded lyrics overlay.
 
 ### Hindi and Hinglish Lyrics Preference
 

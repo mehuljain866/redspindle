@@ -52,11 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.0.0] - 2026-11-03
 
 ### Added
-- **Apple Music, iTunes, and iPod Optimization**:
-  - Automated `Album Artist` (`TPE2` / `aART`) tag unification to eliminate fragmented / split albums on Apple Music, iOS, and click-wheel iPods.
-  - Standalone lossless repair tool (**Fix Split Albums...** / `--fix-tags`) to harmonize existing libraries in seconds without re-compressing audio.
-  - Apple Music advisory ratings: tags songs with official iTunes `[E]` (Explicit) or `[Clean]` badges.
-  - Standardized 640&times;640 baseline JPEG artwork embedding for smooth rendering on vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano).
+- **Universal Library & Device Tag Optimization**:
+  - Automated `Album Artist` (`TPE2` / `aART`) tag unification to eliminate fragmented / split albums across Windows Media Player, Apple Music, and mobile libraries.
+  - Standalone lossless repair tool (**Fix Split Albums...** / `--fix-tags`) to harmonize existing libraries without re-compressing audio.
+  - Content advisory ratings: tags songs with standard `[E]` (Explicit) or `[Clean]` metadata.
+  - Standardized 640&times;640 baseline JPEG artwork embedding for compatibility with vintage click-wheel iPods, car stereos, and portable players.
 
 ---
 

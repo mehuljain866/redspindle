@@ -1002,10 +1002,10 @@ def embed_id3_metadata(
 ) -> bool:
     """
     Embed metadata & cover art into audio files (MP3, FLAC, M4A, Opus, etc.)
-    for full compatibility with media players and file explorers (iTunes, Apple Music, VLC).
+    for compatibility with media players and file explorers (Windows Media Player, VLC, Apple Music, mobile apps).
     Ensures Album Artist (TPE2 / aART / albumartist) is correctly set so albums
-    with featured guest singers stay properly grouped into a single album in Apple Music/iTunes.
-    Embeds synchronized & unsynchronized lyrics (USLT / \xa9lyr) and iTunes Advisory tags.
+    with featured guest singers stay properly grouped into a single album across media players.
+    Embeds synchronized & unsynchronized lyrics (USLT / \xa9lyr), writes .lrc files, and sets advisory tags.
     """
     ext = audio_path.suffix.lower()
 
@@ -1559,10 +1559,10 @@ def batch_transcode_folder(
 
 def fix_library_album_tags(folder: Path, callback=None) -> dict:
     """
-    Scans an audio folder and fixes fragmented/split albums for iTunes & Apple Music.
+    Scans an audio folder and fixes fragmented/split albums across media libraries.
     Unifies the Album Artist tag (TPE2 / aART / albumartist) across all tracks belonging
-    to each album and applies the iTunes compilation flag where appropriate.
-    Zero audio re-encoding: only updates tag headers instantaneously.
+    to each album and applies compilation flags where appropriate.
+    Zero audio re-encoding: only updates metadata tag headers.
     """
     if not folder.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
@@ -1723,9 +1723,9 @@ def batch_update_library_explicit_lyrics(
     - If redownload_swapped is True, detects songs whose audio version needs to be swapped
       (e.g. from explicit to clean radio edit, or clean to explicit) and re-downloads the
       matching audio stream while preserving cover art and metadata.
-    - If embed_lyrics is True, fetches lyrics from LRCLIB (censoring profanities if Clean mode)
-      and embeds them into the song tags (USLT for MP3 / \xa9lyr for M4A) for Apple Music & iOS.
-    - Updates iTunes Advisory rating tags ([E] for Explicit, [Clean] for Clean).
+    - If embed_lyrics is True, fetches lyrics from LRCLIB (censoring profanities if Clean mode),
+      saves companion .lrc files, and embeds tags (USLT for MP3 / \xa9lyr for M4A).
+    - Updates content advisory rating tags ([E] for Explicit, [Clean] for Clean).
     """
     if not folder.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
@@ -2321,7 +2321,7 @@ Examples:
         "--fix-tags",
         metavar="FOLDER",
         default=None,
-        help="Fix fragmented albums for iTunes/Apple Music by unifying Album Artist tags without re-encoding audio",
+        help="Fix fragmented albums across media libraries by unifying Album Artist tags without re-encoding audio",
     )
     parser.add_argument(
         "--explicit-mode",
@@ -2397,7 +2397,7 @@ Examples:
 
     if args.fix_tags:
         target_folder = Path(args.fix_tags).expanduser().resolve()
-        safe_print(f"\n{bold('=== Unifying Album Tags for iTunes & Apple Music ===')}")
+        safe_print(f"\n{bold('=== Unifying Album Artist Tags ===')}")
         safe_print(f"  Target Folder: {cyan(str(target_folder))}\n")
         res = fix_library_album_tags(
             target_folder,

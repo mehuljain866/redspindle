@@ -105,7 +105,7 @@ else
     cat << EOF > "$DESKTOP_ENTRY_DIR/redspindle.desktop"
 [Desktop Entry]
 Name=Red Spindle
-Comment=High-fidelity music downloader, iPod tag harmonizer & CD burn studio
+Comment=High-fidelity music downloader, metadata harmonizer & CD burn studio
 Exec=$VENV_PY $INSTALL_DIR/gui.py
 Icon=$INSTALL_DIR/icon.ico
 Terminal=false

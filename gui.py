@@ -158,7 +158,7 @@ class SpotifyDownloaderApp(ctk.CTk):
 
         subtitle_label = ctk.CTkLabel(
             main_frame,
-            text="High-fidelity music downloader, iPod tag harmonizer & CD burn studio",
+            text="High-fidelity music downloader, metadata harmonizer & CD burn studio",
             font=ctk.CTkFont(size=12),
             text_color="gray70",
         )
@@ -1512,7 +1512,7 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         # Log box
         self.log_box = ctk.CTkTextbox(container, height=160, font=ctk.CTkFont(family="Consolas", size=10), fg_color="#141414")
         self.log_box.pack(fill="both", expand=True)
-        self.log_box.insert("end", "Click 'Scan & Fix Album Tags' to consolidate split albums.\nYour music audio files will remain 100% byte-for-byte identical; only the ID3/Apple grouping tags are updated.\n")
+        self.log_box.insert("end", "Click 'Scan & Fix Album Tags' to consolidate split albums.\nYour music audio files will remain 100% byte-for-byte identical; only the ID3 / Album Artist grouping tags are updated.\n")
         self.log_box.configure(state="disabled")
 
     def _browse_folder(self):
@@ -1666,7 +1666,7 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
 
         subtitle = ctk.CTkLabel(
             container,
-            text="Switch songs between Explicit & Clean Radio Edit versions and embed synchronized lyrics for Apple Music & iOS.",
+            text="Switch songs between Explicit & Clean Radio Edit versions, save .lrc files, and embed lyrics tags.",
             font=ctk.CTkFont(size=11),
             text_color="gray70",
             justify="left",
