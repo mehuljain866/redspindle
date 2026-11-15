@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.2] - 2026-11-15
+
+### Added
+- **Multi-Factor Album Clustering & Collision Protection**:
+  - Re-architected `fix_library_album_tags` to group tracks by directory path, album title, release identity, and artist family.
+  - Distinct albums sharing identical titles (such as Queen's *Greatest Hits* versus ABBA's *Greatest Hits*) in nested or flat directories are isolated into independent clusters and protected from metadata cross-contamination.
+  - Multi-disc sets organized in `CD1`, `CD2`, `Disc 1`, or `Disc 2` subfolders automatically collapse to the album parent directory.
+- **Recursive Directory Traversal**:
+  - Scans nested library folder hierarchies (`Artist/Album/track.ext`) recursively by default, with an optional `--no-recursive` flag for flat scans.
+- **Dry-Run Preview Simulation**:
+  - Added `--dry-run` CLI flag and interactive **Preview Changes** button in the GUI dialog to simulate metadata updates and inspect planned groupings without writing to disk.
+- **Automated Safety Tag Backup & Restoration**:
+  - Generates a timestamped `.redspindle_tag_backup_<timestamp>.json` snapshot recording original tag states prior to modifying any file.
+  - Added `--restore-tags <backup.json>` CLI command to revert tag modifications back to their exact previous state.
+
+### Changed
+- **Neutralized Split Album Dialog Copy**:
+  - Updated dialog window title, header, and subtitles to reflect universal `Album Artist` (`TPE2` / `aART` / `albumartist`) tag harmonization across Windows Media Player, Apple Music, VLC, and mobile players.
+
+---
+
 ## [2.2.1] - 2026-11-15
 
 ### Changed

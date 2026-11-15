@@ -15,6 +15,8 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Optional
 
+__version__ = "2.2.2"
+
 # Ensure stdout/stderr are safe on Windows even under pythonw.exe
 if sys.stdout is None:
     try:
@@ -1363,17 +1365,17 @@ class DownsizeDialog(ctk.CTkToplevel):
 
 class FixAlbumTagsDialog(ctk.CTkToplevel):
     """
-    Dialog to repair and unify album tags for Apple Music / iOS / iTunes.
-    Solves the 'split album' problem by ensuring Album Artist (TPE2 / aART)
-    is consistent across all tracks while preserving contributing artists in TPE1.
-    100% lossless: no audio transcoding.
+    Dialog to repair and harmonize album tags across music collections.
+    Unifies Album Artist (TPE2 / aART / albumartist) across all tracks
+    so multi-artist releases stay grouped into single albums across all players.
+    100% lossless: only updates metadata tag headers without re-encoding audio.
     """
     def __init__(self, parent: ctk.CTk, default_folder: Path):
         super().__init__(parent)
 
         self.title("Fix Split Albums (Album Artist Tag Unification)")
-        self.geometry("640x520")
-        self.minsize(580, 460)
+        self.geometry("680x620")
+        self.minsize(620, 520)
         self.transient(parent)
 
         icon_path = SCRIPT_DIR / "icon.ico"
@@ -1408,24 +1410,50 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
                 elif m_type == "complete":
                     res = payload
                     self.is_processing = False
-                    self.start_btn.configure(state="normal", text="Fix Albums Again")
+                    self.preview_btn.configure(state="normal", text="Preview Changes")
+                    self.start_btn.configure(state="normal", text="Apply Tag Fixes")
                     self.progress_bar.set(1.0)
                     self.pct_label.configure(text="100%")
-                    self.status_label.configure(
-                        text=f"Complete! Fixed {res.get('fixed_files', 0)} songs across {res.get('albums_fixed', 0)} albums.",
-                        text_color="#81C784"
-                    )
-                    self._append_log("\nAlbum consolidation finished!")
-                    self._append_log(f"Total files checked: {res.get('total_files', 0)}")
-                    self._append_log(f"Files updated: {res.get('fixed_files', 0)}")
-                    self._append_log(f"Albums consolidated: {res.get('albums_fixed', 0)}")
-                    for item in res.get("fixed_albums_list", []):
-                        self._append_log(f"  - {item}")
+                    if res.get("dry_run"):
+                        self.status_label.configure(
+                            text=f"Preview complete: {res.get('fixed_files', 0)} files to update across {res.get('albums_fixed', 0)} albums.",
+                            text_color="#FFD54F"
+                        )
+                        self._append_log("\n--- Dry Run Preview Results (No files modified) ---")
+                        self._append_log(f"Total audio files scanned: {res.get('total_files', 0)}")
+                        self._append_log(f"Files needing Album Artist unification: {res.get('fixed_files', 0)}")
+                        self._append_log(f"Albums affected: {res.get('albums_fixed', 0)}")
+                        for item in res.get("fixed_albums_list", []):
+                            self._append_log(f"  * {item}")
+                        if res.get("fixed_files", 0) > 0:
+                            self._append_log("\nClick 'Apply Tag Fixes' to write these metadata updates.")
+                        else:
+                            self._append_log("\nAll scanned albums already have unified tags. No changes needed.")
+                    else:
+                        self.status_label.configure(
+                            text=f"Complete! Updated {res.get('fixed_files', 0)} tracks across {res.get('albums_fixed', 0)} albums.",
+                            text_color="#81C784"
+                        )
+                        self._append_log("\n--- Tag Harmonization Complete ---")
+                        self._append_log(f"Total files checked: {res.get('total_files', 0)}")
+                        self._append_log(f"Files updated: {res.get('fixed_files', 0)}")
+                        self._append_log(f"Albums consolidated: {res.get('albums_fixed', 0)}")
+                        if res.get("backup_file"):
+                            self._append_log(f"Safety tag backup saved to: {res.get('backup_file')}")
+                        for item in res.get("fixed_albums_list", []):
+                            self._append_log(f"  - {item}")
+                        messagebox.showinfo(
+                            "Album Tags Harmonized",
+                            f"Successfully updated {res.get('fixed_files', 0)} files across {res.get('albums_fixed', 0)} albums."
+                            + (f"\n\nA safety backup was created at:\n{res.get('backup_file')}" if res.get('backup_file') else "")
+                        )
                 elif m_type == "error":
                     self.is_processing = False
-                    self.start_btn.configure(state="normal", text="Scan & Fix Album Tags")
+                    self.preview_btn.configure(state="normal", text="Preview Changes")
+                    self.start_btn.configure(state="normal", text="Apply Tag Fixes")
                     self.status_label.configure(text=f"Error: {payload}", text_color="#E53935")
                     self._append_log(f"Error: {payload}")
+                    messagebox.showerror("Error", str(payload))
         except Exception:
             pass
         if not self._closed:
@@ -1438,7 +1466,7 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         # Header
         title = ctk.CTkLabel(
             container,
-            text="Fix Split Albums (Album Artist Tag Unification)",
+            text="Fix Split Albums",
             font=ctk.CTkFont(size=18, weight="bold"),
             text_color="#CE93D8",
             anchor="w",
@@ -1447,19 +1475,19 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
 
         subtitle = ctk.CTkLabel(
             container,
-            text="Unifies Album Artist tags so albums with featured singers (e.g. Gorillaz feat. Snoop Dogg)\nstay grouped across Windows Media Player, Apple Music, and mobile libraries. Lossless.",
+            text="Harmonizes Album Artist metadata across MP3, M4A, and FLAC files.\nEnsures multi-artist releases stay grouped into cohesive albums without audio re-encoding.",
             font=ctk.CTkFont(size=11),
             text_color="gray70",
             justify="left",
             anchor="w",
         )
-        subtitle.pack(fill="x", pady=(0, 12))
+        subtitle.pack(fill="x", pady=(0, 10))
 
         # Folder card
         folder_card = ctk.CTkFrame(container, fg_color="#1E1E1E", corner_radius=10)
-        folder_card.pack(fill="x", pady=(0, 12))
+        folder_card.pack(fill="x", pady=(0, 10))
         f_inner = ctk.CTkFrame(folder_card, fg_color="transparent")
-        f_inner.pack(fill="x", padx=14, pady=12)
+        f_inner.pack(fill="x", padx=14, pady=10)
 
         ctk.CTkLabel(f_inner, text="Music Folder to Scan:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray85").pack(anchor="w", pady=(0, 4))
         row = ctk.CTkFrame(f_inner, fg_color="transparent")
@@ -1471,25 +1499,64 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         browse_btn = ctk.CTkButton(row, text="Browse...", width=80, height=32, command=self._browse_folder)
         browse_btn.pack(side="left")
 
+        # Options Card
+        opts_card = ctk.CTkFrame(container, fg_color="#1E1E1E", corner_radius=10)
+        opts_card.pack(fill="x", pady=(0, 10))
+        opts_inner = ctk.CTkFrame(opts_card, fg_color="transparent")
+        opts_inner.pack(fill="x", padx=14, pady=8)
+
+        self.recursive_var = ctk.BooleanVar(value=True)
+        rec_chk = ctk.CTkCheckBox(
+            opts_inner,
+            text="Scan subdirectories recursively (processes Artist / Album nested folders)",
+            variable=self.recursive_var,
+            font=ctk.CTkFont(size=11),
+            fg_color="#7B1FA2",
+            hover_color="#9C27B0",
+        )
+        rec_chk.pack(anchor="w", pady=(2, 4))
+
+        self.backup_var = ctk.BooleanVar(value=True)
+        backup_chk = ctk.CTkCheckBox(
+            opts_inner,
+            text="Save safety tag backup (.json) in the folder before modifying files",
+            variable=self.backup_var,
+            font=ctk.CTkFont(size=11),
+            fg_color="#7B1FA2",
+            hover_color="#9C27B0",
+        )
+        backup_chk.pack(anchor="w", pady=(0, 2))
+
         # Action Buttons
         btn_row = ctk.CTkFrame(container, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(0, 10))
+        btn_row.pack(fill="x", pady=(0, 8))
+
+        self.preview_btn = ctk.CTkButton(
+            btn_row,
+            text="Preview Changes",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            height=36,
+            fg_color="#4A148C",
+            hover_color="#6A1B9A",
+            command=self._start_preview,
+        )
+        self.preview_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         self.start_btn = ctk.CTkButton(
             btn_row,
-            text="Scan & Fix Album Tags",
-            font=ctk.CTkFont(size=13, weight="bold"),
+            text="Apply Tag Fixes",
+            font=ctk.CTkFont(size=12, weight="bold"),
             height=36,
             fg_color="#7B1FA2",
             hover_color="#9C27B0",
-            command=self._start_fix,
+            command=self._start_apply,
         )
         self.start_btn.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
         close_btn = ctk.CTkButton(
             btn_row,
             text="Close",
-            width=90,
+            width=80,
             height=36,
             fg_color="#333333",
             hover_color="#444444",
@@ -1507,12 +1574,17 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
 
         self.progress_bar = ctk.CTkProgressBar(container, height=6)
         self.progress_bar.set(0.0)
-        self.progress_bar.pack(fill="x", pady=(0, 10))
+        self.progress_bar.pack(fill="x", pady=(0, 8))
 
         # Log box
-        self.log_box = ctk.CTkTextbox(container, height=160, font=ctk.CTkFont(family="Consolas", size=10), fg_color="#141414")
+        self.log_box = ctk.CTkTextbox(container, height=180, font=ctk.CTkFont(family="Consolas", size=10), fg_color="#141414")
         self.log_box.pack(fill="both", expand=True)
-        self.log_box.insert("end", "Click 'Scan & Fix Album Tags' to consolidate split albums.\nYour music audio files will remain 100% byte-for-byte identical; only the ID3 / Album Artist grouping tags are updated.\n")
+        self.log_box.insert(
+            "end",
+            "Click 'Preview Changes' to simulate tag repairs and inspect proposed groupings.\n"
+            "Click 'Apply Tag Fixes' to write unified Album Artist tags to your files.\n"
+            "Audio data remains 100% byte-for-byte untouched; only tag headers are updated.\n"
+        )
         self.log_box.configure(state="disabled")
 
     def _browse_folder(self):
@@ -1528,7 +1600,13 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         self.log_box.see("end")
         self.log_box.configure(state="disabled")
 
-    def _start_fix(self):
+    def _start_preview(self):
+        self._start_task(dry_run=True)
+
+    def _start_apply(self):
+        self._start_task(dry_run=False)
+
+    def _start_task(self, dry_run: bool):
         if self.is_processing:
             return
         f_path = Path(self.folder_entry.get().strip()).expanduser().resolve()
@@ -1537,9 +1615,16 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
             return
 
         self.is_processing = True
-        self.start_btn.configure(state="disabled", text="Fixing Tags...")
-        self.status_label.configure(text="Scanning and fixing album tags...", text_color="#CE93D8")
+        self.preview_btn.configure(state="disabled")
+        self.start_btn.configure(state="disabled")
+        if dry_run:
+            self.status_label.configure(text="Simulating album grouping (Dry Run)...", text_color="#CE93D8")
+        else:
+            self.status_label.configure(text="Harmonizing album tags...", text_color="#CE93D8")
         self.progress_bar.set(0.1)
+
+        recursive = self.recursive_var.get()
+        backup = self.backup_var.get()
 
         def _worker():
             try:
@@ -1547,7 +1632,13 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
                     self._msg_queue.put(("status", (msg, prog)))
                     self._msg_queue.put(("log", msg))
 
-                res = fix_library_album_tags(f_path, callback=cb)
+                res = fix_library_album_tags(
+                    f_path,
+                    recursive=recursive,
+                    dry_run=dry_run,
+                    backup=backup,
+                    callback=cb,
+                )
                 self._msg_queue.put(("complete", res))
             except Exception as exc:
                 self._msg_queue.put(("error", str(exc)))
@@ -1564,8 +1655,8 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
     Dialog to manage Explicit vs Clean audio and lyrics across an entire music folder.
     - Switch songs between uncensored Explicit and Clean (Radio Edit) versions.
     - Re-downloads the matching YouTube audio stream when switching versions.
-    - Fetches & embeds lyrics into ID3 tags (USLT for MP3 / ©lyr for M4A) for Apple Music & iOS.
-    - Updates Apple Music / iTunes Advisory badges ([E] for Explicit, [Clean] for Clean).
+    - Fetches & embeds lyrics into metadata tags (USLT for MP3, ©lyr for M4A, lyrics for FLAC).
+    - Updates content advisory metadata ([E] for Explicit, [Clean] for Clean).
     """
     def __init__(self, parent: ctk.CTk, default_folder: Path):
         super().__init__(parent)

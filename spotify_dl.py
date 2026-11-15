@@ -30,6 +30,8 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+__version__ = "2.2.2"
+
 # Ensure stdout/stderr are safe on Windows even under pythonw.exe or CP1252 consoles
 if sys.stdout is None:
     try:
@@ -1557,26 +1559,127 @@ def batch_transcode_folder(
     return result
 
 
-def fix_library_album_tags(folder: Path, callback=None) -> dict:
+GENERIC_ALBUM_TITLES = {
+    "greatest hits", "best of", "the best of", "hits", "anthology",
+    "singles", "collection", "the collection", "ultimate collection",
+    "live", "gold", "platinum", "ep", "remixes", "greatest hits: remastered",
+    "self-titled", "essential", "the essential"
+}
+
+
+def _clean_tag_str(val: Any) -> str:
+    """Strip whitespace and replace non-breaking spaces."""
+    if val is None:
+        return ""
+    return str(val).replace("\xa0", " ").strip()
+
+
+def _extract_lead_artist(artist_str: str) -> str:
+    """Extract primary artist from collaboration and featured strings."""
+    if not artist_str:
+        return ""
+    tokens = re.split(
+        r"[,;&/|]|(?:\s+feat\.?|\s+ft\.?|\s+featuring|\s+vs\.?|\s+with)\s+",
+        artist_str,
+        flags=re.IGNORECASE
+    )
+    return tokens[0].strip()
+
+
+def _cluster_album_tracks(track_list: List[dict]):
+    """
+    Partitions tracks sharing the same directory and album title into coherent release clusters.
+    Prevents different artist albums sharing the same name (e.g. Queen vs ABBA Greatest Hits)
+    from colliding, while unifying featured artist releases (e.g. Gorillaz feat. guest).
+    Yields tuples of (album_name, unified_album_artist, is_compilation, sub_track_list).
+    """
+    if not track_list:
+        return
+
+    from collections import Counter, defaultdict
+
+    alb_name = track_list[0]["album"]
+    alb_lower = alb_name.lower().strip()
+
+    is_explicit_comp = any(t.get("compilation") for t in track_list) or any(
+        t.get("album_artist", "").lower() == "various artists" for t in track_list
+    )
+    is_soundtrack_title = bool(
+        re.search(r"\b(ost|soundtrack|motion picture|various artists|score|compilation)\b", alb_lower)
+    )
+
+    lead_map = {}
+    for t in track_list:
+        art = t.get("artist", "").strip()
+        lead = _extract_lead_artist(art)
+        lead_map[id(t)] = lead or art
+
+    lead_counts = Counter(lead_map.values())
+
+    # Soundtracks and explicit compilations
+    if is_soundtrack_title or is_explicit_comp:
+        yield (alb_name, "Various Artists", True, track_list)
+        return
+
+    # Check if a single dominant artist family covers all tracks
+    top_lead = lead_counts.most_common(1)[0][0]
+    all_contain_top = all(
+        top_lead.lower() in t.get("artist", "").lower()
+        or top_lead.lower() == t.get("album_artist", "").lower()
+        for t in track_list
+    )
+    if all_contain_top:
+        yield (alb_name, top_lead, False, track_list)
+        return
+
+    # Multi-artist releases with diverse tracks and no dominant artist (>= 4 distinct artists)
+    total_tracks = len(track_list)
+    if len(lead_counts) >= 4 and lead_counts.most_common(1)[0][1] < total_tracks * 0.5:
+        yield (alb_name, "Various Artists", True, track_list)
+        return
+
+    # Disjoint artist families sharing the directory/title (e.g. Queen vs ABBA)
+    families = defaultdict(list)
+    for t in track_list:
+        art = t.get("artist", "").strip()
+        aa = t.get("album_artist", "").strip()
+        lead = lead_map[id(t)]
+        matched = None
+        for fam in list(families.keys()):
+            if fam.lower() in art.lower() or (aa and fam.lower() == aa.lower()) or (lead and lead.lower() in fam.lower()):
+                matched = fam
+                break
+        fam_key = matched or (aa if aa and aa.lower() != "various artists" else None) or lead or art or "Unknown Artist"
+        families[fam_key].append(t)
+
+    for fam_key, sub_tracks in families.items():
+        yield (alb_name, fam_key, False, sub_tracks)
+
+
+def fix_library_album_tags(
+    folder: Path,
+    recursive: bool = True,
+    dry_run: bool = False,
+    backup: bool = True,
+    callback: Optional[Callable[[str, float], None]] = None,
+) -> dict:
     """
     Scans an audio folder and fixes fragmented/split albums across media libraries.
-    Unifies the Album Artist tag (TPE2 / aART / albumartist) across all tracks belonging
-    to each album and applies compilation flags where appropriate.
-    Zero audio re-encoding: only updates metadata tag headers.
+    Unifies the Album Artist tag (TPE2 for MP3, aART for MP4/M4A, albumartist for FLAC)
+    across tracks belonging to each album without audio re-encoding.
+
+    Features:
+    - Recursive library scanning (Artist/Album/track.ext).
+    - Multi-factor clustering by directory, release identity, and artist clusters.
+    - Dry-run simulation mode to preview changes before applying.
+    - Safety tag backup snapshots (.json) before modifying files.
     """
+    folder = Path(folder).expanduser().resolve()
     if not folder.exists():
         raise FileNotFoundError(f"Folder not found: {folder}")
 
-    from collections import defaultdict, Counter
-
-    audio_files = [
-        f for f in folder.iterdir()
-        if f.is_file() and f.suffix.lower() in (".mp3", ".m4a", ".mp4", ".flac")
-    ]
-
-    total_files = len(audio_files)
-    if total_files == 0:
-        return {"total_files": 0, "fixed_files": 0, "albums_fixed": 0, "fixed_albums_list": []}
+    from collections import defaultdict
+    from datetime import datetime, timezone
 
     def _notify(status: str, prog: float):
         if callback:
@@ -1585,123 +1688,311 @@ def fix_library_album_tags(folder: Path, callback=None) -> dict:
             except Exception:
                 pass
 
-    _notify(f"Scanning {total_files} files for album grouping...", 0.0)
+    if recursive:
+        audio_files = [
+            f for f in folder.rglob("*")
+            if f.is_file() and f.suffix.lower() in (".mp3", ".m4a", ".mp4", ".flac")
+        ]
+    else:
+        audio_files = [
+            f for f in folder.iterdir()
+            if f.is_file() and f.suffix.lower() in (".mp3", ".m4a", ".mp4", ".flac")
+        ]
 
-    # Group files by Album Title
-    albums_map = defaultdict(list)
+    audio_files.sort()
+    total_files = len(audio_files)
+    if total_files == 0:
+        return {
+            "dry_run": dry_run,
+            "total_files": 0,
+            "fixed_files": 0,
+            "albums_fixed": 0,
+            "fixed_albums_list": [],
+            "changes": [],
+            "backup_file": None,
+        }
+
+    _notify(f"Scanning {total_files} audio files across library...", 0.05)
+
+    parsed_tracks = []
     for idx, f in enumerate(audio_files):
         ext = f.suffix.lower()
+        alb, art, aa, comp, yr, mb_id = "", "", "", False, "", ""
+        mut_obj = None
         try:
             if ext == ".mp3":
                 id3 = ID3(str(f))
-                alb = str(id3.get("TALB", "")).replace("\xa0", " ").strip()
-                art = str(id3.get("TPE1", "")).replace("\xa0", " ").strip()
-                tpe2 = str(id3.get("TPE2", "")).replace("\xa0", " ").strip()
-                if alb:
-                    albums_map[alb].append({
-                        "path": f, "ext": ext, "id3": id3,
-                        "album": alb, "artist": art, "album_artist": tpe2
-                    })
+                mut_obj = id3
+                alb = _clean_tag_str(id3.get("TALB", ""))
+                art = _clean_tag_str(id3.get("TPE1", ""))
+                aa = _clean_tag_str(id3.get("TPE2", ""))
+                comp = str(id3.get("TCMP", "")).strip() in ("1", "true", "True")
+                tdrc = id3.get("TDRC")
+                yr = str(tdrc)[:4] if tdrc else ""
+                mb = id3.get("TXXX:MusicBrainz Album Id")
+                mb_id = str(mb).strip() if mb else ""
             elif ext in (".m4a", ".mp4") and MP4:
                 mp4 = MP4(str(f))
-                alb = str(mp4.get("\xa9alb", [""])[0]).replace("\xa0", " ").strip()
-                art = str(mp4.get("\xa9ART", [""])[0]).replace("\xa0", " ").strip()
-                aart = str(mp4.get("aART", [""])[0]).replace("\xa0", " ").strip()
-                if alb:
-                    albums_map[alb].append({
-                        "path": f, "ext": ext, "mp4": mp4,
-                        "album": alb, "artist": art, "album_artist": aart
-                    })
+                mut_obj = mp4
+                alb = _clean_tag_str(mp4.get("\xa9alb", [""])[0])
+                art = _clean_tag_str(mp4.get("\xa9ART", [""])[0])
+                aa = _clean_tag_str(mp4.get("aART", [""])[0])
+                comp = bool(mp4.get("cpil", [False])[0])
+                day = mp4.get("\xa9day", [""])[0]
+                yr = str(day)[:4] if day else ""
+                mb = mp4.get("----:com.apple.iTunes:MusicBrainz Album Id", [b""])[0]
+                mb_id = mb.decode("utf-8", errors="ignore").strip() if isinstance(mb, bytes) else str(mb).strip()
             elif ext == ".flac" and FLAC:
                 fl = FLAC(str(f))
-                alb = str(fl.get("album", [""])[0]).replace("\xa0", " ").strip()
-                art = str(fl.get("artist", [""])[0]).replace("\xa0", " ").strip()
-                albart = str(fl.get("albumartist", [""])[0]).replace("\xa0", " ").strip()
-                if alb:
-                    albums_map[alb].append({
-                        "path": f, "ext": ext, "flac": fl,
-                        "album": alb, "artist": art, "album_artist": albart
-                    })
+                mut_obj = fl
+                alb = _clean_tag_str(fl.get("album", [""])[0])
+                art = _clean_tag_str(fl.get("artist", [""])[0])
+                aa = _clean_tag_str(fl.get("albumartist", [""])[0])
+                comp = str(fl.get("compilation", ["0"])[0]).strip() in ("1", "true", "True")
+                date = fl.get("date", [""])[0]
+                yr = str(date)[:4] if date else ""
+                mb = fl.get("musicbrainz_albumid", [""])[0]
+                mb_id = str(mb).strip() if mb else ""
         except Exception:
-            pass
-
-    fixed_files = 0
-    fixed_albums_list = []
-
-    for alb_name, track_list in albums_map.items():
-        if not alb_name or len(track_list) == 0:
             continue
 
-        lead_artists = [
-            t["artist"].split(",")[0].strip()
-            for t in track_list
-            if t["artist"]
-        ]
-        if not lead_artists:
+        if not alb:
             continue
 
-        lead_counts = Counter(lead_artists)
-        top_lead, count = lead_counts.most_common(1)[0]
+        # Effective album directory (collapses CD1 / Disc 1 / Disk 2 subfolders)
+        parent_dir = f.parent
+        if re.match(r"^(cd|disc|disk|part)\s*\d+$", parent_dir.name.strip(), re.IGNORECASE):
+            eff_dir = parent_dir.parent
+        else:
+            eff_dir = parent_dir
 
-        is_ost = (
-            "soundtrack" in alb_name.lower()
-            or "various" in alb_name.lower()
-            or (len(lead_counts) > 2 and count < len(track_list) / 2)
-        )
-        unified_album_artist = "Various Artists" if is_ost else top_lead
+        parsed_tracks.append({
+            "path": f,
+            "ext": ext,
+            "mut_obj": mut_obj,
+            "album": alb,
+            "artist": art,
+            "album_artist": aa,
+            "compilation": comp,
+            "year": yr,
+            "mb_id": mb_id,
+            "eff_dir": eff_dir,
+        })
 
-        album_needed_fix = False
-        for t in track_list:
-            cur_aa = t.get("album_artist", "")
-            needs_update = (
-                cur_aa != unified_album_artist
-                or "\xa0" in t["artist"]
-                or "\xa0" in cur_aa
-            )
-            if not needs_update:
-                continue
+    # Group tracks by effective directory and album title
+    dir_album_map = defaultdict(list)
+    for t in parsed_tracks:
+        norm_title = t["album"].lower()
+        dir_album_map[(t["eff_dir"], norm_title)].append(t)
 
-            album_needed_fix = True
-            ext = t["ext"]
+    _notify(f"Analyzing {len(dir_album_map)} album release candidates...", 0.2)
+
+    planned_albums = []
+    files_to_modify = []
+
+    for (eff_dir, norm_title), track_list in dir_album_map.items():
+        for alb_name, unified_album_artist, is_ost, sub_tracks in _cluster_album_tracks(track_list):
+            affected_sub_files = []
+            for t in sub_tracks:
+                cur_aa = t.get("album_artist", "")
+                needs_aa = (cur_aa != unified_album_artist)
+                needs_clean = ("\xa0" in t["artist"] or "\xa0" in cur_aa)
+                needs_comp = is_ost and not t.get("compilation")
+
+                if needs_aa or needs_clean or needs_comp:
+                    file_info = {
+                        "path": t["path"],
+                        "ext": t["ext"],
+                        "mut_obj": t["mut_obj"],
+                        "album": alb_name,
+                        "artist": t["artist"],
+                        "current_album_artist": cur_aa,
+                        "proposed_album_artist": unified_album_artist,
+                        "current_compilation": t.get("compilation"),
+                        "proposed_compilation": is_ost,
+                    }
+                    affected_sub_files.append(file_info)
+                    files_to_modify.append(file_info)
+
+            if affected_sub_files:
+                try:
+                    rel_dir = eff_dir.relative_to(folder)
+                except ValueError:
+                    rel_dir = eff_dir.name
+                planned_albums.append({
+                    "album": alb_name,
+                    "directory": str(eff_dir),
+                    "dir_rel": str(rel_dir),
+                    "proposed_album_artist": unified_album_artist,
+                    "is_compilation": is_ost,
+                    "files": affected_sub_files,
+                })
+
+    fixed_albums_list = [
+        f"{item['album']} ({item['dir_rel']}) -> {item['proposed_album_artist']}"
+        for item in planned_albums
+    ]
+
+    backup_file_path = None
+    if not dry_run and files_to_modify and backup:
+        _notify("Creating safety tag backup JSON snapshot...", 0.4)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file_path = folder / f".redspindle_tag_backup_{ts}.json"
+        backup_dict = {
+            "version": "2.2.2",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "root_folder": str(folder),
+            "total_files": len(files_to_modify),
+            "files": {
+                str(f_info["path"]): {
+                    "ext": f_info["ext"],
+                    "album": f_info["album"],
+                    "artist": f_info["artist"],
+                    "album_artist": f_info["current_album_artist"],
+                    "compilation": f_info["current_compilation"],
+                }
+                for f_info in files_to_modify
+            }
+        }
+        with open(backup_file_path, "w", encoding="utf-8") as bf:
+            json.dump(backup_dict, bf, indent=2)
+
+    fixed_files_count = 0
+    if not dry_run:
+        _notify(f"Writing updated tags to {len(files_to_modify)} files...", 0.6)
+        for f_info in files_to_modify:
+            ext = f_info["ext"]
+            alb_name = f_info["album"]
+            unified_album_artist = f_info["proposed_album_artist"]
+            is_ost = f_info["proposed_compilation"]
             try:
                 if ext == ".mp3":
-                    id3 = t["id3"]
+                    id3 = f_info["mut_obj"]
                     id3.add(TPE2(encoding=3, text=unified_album_artist))
                     if id3.get("TPE1"):
-                        id3.add(TPE1(encoding=3, text=str(id3.get("TPE1")).replace("\xa0", " ").strip()))
+                        id3.add(TPE1(encoding=3, text=_clean_tag_str(id3.get("TPE1"))))
                     if id3.get("TALB"):
                         id3.add(TALB(encoding=3, text=alb_name))
                     if is_ost:
                         id3.add(TCMP(encoding=3, text="1"))
                     id3.save(v2_version=3)
-                    fixed_files += 1
+                    fixed_files_count += 1
                 elif ext in (".m4a", ".mp4") and MP4:
-                    mp4 = t["mp4"]
+                    mp4 = f_info["mut_obj"]
                     mp4["aART"] = [unified_album_artist]
                     if is_ost:
                         mp4["cpil"] = True
                     mp4.save()
-                    fixed_files += 1
+                    fixed_files_count += 1
                 elif ext == ".flac" and FLAC:
-                    fl = t["flac"]
+                    fl = f_info["mut_obj"]
                     fl["albumartist"] = unified_album_artist
                     if is_ost:
                         fl["compilation"] = "1"
                     fl.save()
-                    fixed_files += 1
+                    fixed_files_count += 1
+            except Exception:
+                pass
+    else:
+        fixed_files_count = len(files_to_modify)
+
+    _notify(
+        f"{'Preview complete:' if dry_run else 'Tag harmonization complete:'} "
+        f"{fixed_files_count} files across {len(planned_albums)} albums.",
+        1.0
+    )
+
+    return {
+        "dry_run": dry_run,
+        "total_files": total_files,
+        "fixed_files": fixed_files_count,
+        "albums_fixed": len(planned_albums),
+        "fixed_albums_list": fixed_albums_list,
+        "changes": planned_albums,
+        "backup_file": str(backup_file_path) if backup_file_path else None,
+    }
+
+
+def restore_tags_from_backup(backup_file: Path, callback: Optional[Callable[[str, float], None]] = None) -> dict:
+    """
+    Restores original album artist and compilation tags from a previously generated
+    Red Spindle JSON backup snapshot file.
+    """
+    backup_file = Path(backup_file).expanduser().resolve()
+    if not backup_file.exists():
+        raise FileNotFoundError(f"Backup file not found: {backup_file}")
+
+    with open(backup_file, "r", encoding="utf-8") as bf:
+        data = json.load(bf)
+
+    files_dict = data.get("files", {})
+    total = len(files_dict)
+    restored_count = 0
+
+    def _notify(msg: str, prog: float):
+        if callback:
+            try:
+                callback(msg, prog)
             except Exception:
                 pass
 
-        if album_needed_fix:
-            fixed_albums_list.append(f"{alb_name} -> {unified_album_artist}")
+    _notify(f"Restoring tags for {total} files from {backup_file.name}...", 0.0)
 
-    _notify(f"Album consolidation complete: {fixed_files} files updated across {len(fixed_albums_list)} albums.", 1.0)
+    for idx, (file_str, tags) in enumerate(files_dict.items()):
+        f_path = Path(file_str)
+        if not f_path.exists():
+            continue
+        ext = tags.get("ext", f_path.suffix.lower())
+        orig_aa = tags.get("album_artist", "")
+        orig_comp = tags.get("compilation")
+        try:
+            if ext == ".mp3":
+                id3 = ID3(str(f_path))
+                if orig_aa:
+                    id3.add(TPE2(encoding=3, text=orig_aa))
+                else:
+                    id3.delall("TPE2")
+                if orig_comp:
+                    id3.add(TCMP(encoding=3, text="1"))
+                else:
+                    id3.delall("TCMP")
+                id3.save(v2_version=3)
+                restored_count += 1
+            elif ext in (".m4a", ".mp4") and MP4:
+                mp4 = MP4(str(f_path))
+                if orig_aa:
+                    mp4["aART"] = [orig_aa]
+                elif "aART" in mp4:
+                    del mp4["aART"]
+                if orig_comp:
+                    mp4["cpil"] = True
+                elif "cpil" in mp4:
+                    del mp4["cpil"]
+                mp4.save()
+                restored_count += 1
+            elif ext == ".flac" and FLAC:
+                fl = FLAC(str(f_path))
+                if orig_aa:
+                    fl["albumartist"] = orig_aa
+                elif "albumartist" in fl:
+                    del fl["albumartist"]
+                if orig_comp:
+                    fl["compilation"] = "1"
+                elif "compilation" in fl:
+                    del fl["compilation"]
+                fl.save()
+                restored_count += 1
+        except Exception:
+            pass
 
+        if total > 0 and idx % 10 == 0:
+            _notify(f"Restored {idx + 1}/{total} files...", (idx + 1) / total)
+
+    _notify(f"Restoration finished: {restored_count} / {total} files restored.", 1.0)
     return {
-        "total_files": total_files,
-        "fixed_files": fixed_files,
-        "albums_fixed": len(fixed_albums_list),
-        "fixed_albums_list": fixed_albums_list,
+        "restored_files": restored_count,
+        "total_in_backup": total,
+        "backup_file": str(backup_file),
     }
 
 
@@ -2321,7 +2612,28 @@ Examples:
         "--fix-tags",
         metavar="FOLDER",
         default=None,
-        help="Fix fragmented albums across media libraries by unifying Album Artist tags without re-encoding audio",
+        help="Harmonize Album Artist tags to fix fragmented albums across media libraries without re-encoding audio",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Simulate tag repairs and display proposed changes without modifying files on disk",
+    )
+    parser.add_argument(
+        "--no-recursive",
+        action="store_true",
+        help="Scan only the specified folder, without checking subdirectories",
+    )
+    parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Skip creating a safety tag backup JSON file before applying modifications",
+    )
+    parser.add_argument(
+        "--restore-tags",
+        metavar="BACKUP_JSON",
+        default=None,
+        help="Restore audio tags from a previously generated Red Spindle tag backup JSON file",
     )
     parser.add_argument(
         "--explicit-mode",
@@ -2359,7 +2671,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="Red Spindle 2.2.1",
+        version="Red Spindle 2.2.2",
     )
 
     args = parser.parse_args()
@@ -2367,6 +2679,19 @@ Examples:
     if args.cd_prep:
         import gui
         gui.launch()
+        return
+
+    if args.restore_tags:
+        backup_file = Path(args.restore_tags).expanduser().resolve()
+        safe_print(f"\n{bold('=== Restoring Tags from Safety Backup ===')}")
+        safe_print(f"  Backup File: {cyan(str(backup_file))}\n")
+        res = restore_tags_from_backup(
+            backup_file,
+            callback=lambda msg, prog: safe_print(f"  [*] {msg}")
+        )
+        safe_print(f"\n  {green('[OK] Tag Restoration Complete!')}")
+        safe_print(f"  Files Restored : {res.get('restored_files', 0)} / {res.get('total_in_backup', 0)}")
+        safe_print()
         return
 
     if args.update_explicit:
@@ -2397,18 +2722,35 @@ Examples:
 
     if args.fix_tags:
         target_folder = Path(args.fix_tags).expanduser().resolve()
-        safe_print(f"\n{bold('=== Unifying Album Artist Tags ===')}")
-        safe_print(f"  Target Folder: {cyan(str(target_folder))}\n")
+        mode_str = "Previewing Proposed Tag Unification" if args.dry_run else "Unifying Album Artist Tags"
+        safe_print(f"\n{bold(f'=== {mode_str} ===')}")
+        safe_print(f"  Target Folder : {cyan(str(target_folder))}")
+        safe_print(f"  Mode          : {'Dry Run (Preview Only)' if args.dry_run else 'Live Update'}")
+        safe_print(f"  Recursive     : {'No' if args.no_recursive else 'Yes (Nested Subdirectories)'}")
+        safe_print(f"  Safety Backup : {'No' if args.no_backup else 'Yes (.json Snapshot)'}\n")
         res = fix_library_album_tags(
             target_folder,
+            recursive=not args.no_recursive,
+            dry_run=args.dry_run,
+            backup=not args.no_backup,
             callback=lambda msg, prog: safe_print(f"  [*] {msg}")
         )
-        safe_print(f"\n  {green('[OK] Album Tag Fix Complete!')}")
-        safe_print(f"  Scanned Files : {res.get('total_files', 0)}")
-        safe_print(f"  Updated Tracks: {res.get('fixed_files', 0)}")
-        safe_print(f"  Fixed Albums  : {res.get('albums_fixed', 0)}")
-        for alb in res.get("fixed_albums_list", []):
-            safe_print(f"    - {alb}")
+        if args.dry_run:
+            safe_print(f"\n  {yellow('[DRY RUN] Simulation Finished (No files modified)')}")
+            safe_print(f"  Scanned Files   : {res.get('total_files', 0)}")
+            safe_print(f"  Files to Update : {res.get('fixed_files', 0)}")
+            safe_print(f"  Albums Affected : {res.get('albums_fixed', 0)}")
+            for alb in res.get("fixed_albums_list", []):
+                safe_print(f"    - {alb}")
+        else:
+            safe_print(f"\n  {green('[OK] Album Tag Fix Complete!')}")
+            safe_print(f"  Scanned Files  : {res.get('total_files', 0)}")
+            safe_print(f"  Updated Tracks : {res.get('fixed_files', 0)}")
+            safe_print(f"  Fixed Albums   : {res.get('albums_fixed', 0)}")
+            if res.get("backup_file"):
+                safe_print(f"  Safety Backup  : {cyan(res.get('backup_file'))}")
+            for alb in res.get("fixed_albums_list", []):
+                safe_print(f"    - {alb}")
         safe_print()
         return
 

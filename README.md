@@ -50,13 +50,13 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 ## Library Tagging and Player Compatibility
 
-Most media players—including Windows Media Player, Apple Music, iTunes, and mobile apps—organize collections using metadata tags. Red Spindle structures tags to avoid common grouping and display issues:
+Most media players (including Windows Media Player, Apple Music, iTunes, and mobile apps) organize collections using metadata tags. Red Spindle structures tags to avoid common grouping and display issues:
 
 - **Unified Album Artist (Prevents Split Albums)**: When songs feature guest artists (for example, *Gorillaz feat. Snoop Dogg*), media players lacking a unified `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) separate the release into multiple 1-song albums. Red Spindle sets a consistent `Album Artist` while preserving track-level performer credits.
 - **Dual-Layer Lyrics (.lrc and Embedded Tags)**: Standard players read external `.lrc` files, while closed players (like Apple Music and car stereos) only read internal container tags (`USLT` for MP3, `©lyr` for M4A). Red Spindle provides both.
 - **Hardware-Compatible 640x640 Artwork**: Progressive or oversized JPEG encodings cause decoding lag and memory errors on older hardware players, classic click-wheel iPods, and in-car systems. Covers are encoded as standard 640&times;640 baseline JPEGs.
 - **Content Advisory Badges**: Adds `rtng` metadata so explicit and clean radio tracks display `[E]` or `[Clean]` tags in supporting players.
-- **Library Tag Repair**: Use **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to update grouping tags across existing files without re-encoding audio.
+- **Library Tag Repair (Dry Run & Safety Snapshots)**: Use **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"`. Scans nested directories recursively, isolates distinct albums sharing identical titles (such as *Greatest Hits*) using multi-factor clustering, simulates changes in advance with `--dry-run`, and creates an automated `.json` tag backup snapshot before modifying files.
 
 ---
 
@@ -118,8 +118,14 @@ python spotify_dl.py https://open.spotify.com/playlist/<id> -o "C:\Music\MyPlayl
 # Downsize all songs in a folder to save storage (e.g. 192k or 128k):
 python spotify_dl.py --downsize "C:\Music\MyPlaylist" --bitrate 192k
 
-# Fix fragmented/split albums across your music library:
+# Simulate album tag harmonization without modifying files (Dry Run):
+python spotify_dl.py --fix-tags "C:\Music\MyPlaylist" --dry-run
+
+# Fix fragmented/split albums across your music library (creates safety backup):
 python spotify_dl.py --fix-tags "C:\Music\MyPlaylist"
+
+# Restore original tags at any time from a backup JSON snapshot:
+python spotify_dl.py --restore-tags "C:\Music\MyPlaylist\.redspindle_tag_backup_<timestamp>.json"
 
 # Update an existing music folder to Clean radio edits and embed lyrics:
 python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode clean
@@ -139,7 +145,11 @@ python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode cle
 | `--force` | Re-download songs even if already present | `False` |
 | `--limit` | Limit download to first N tracks | `None` (all) |
 | `--downsize` | Downsize/transcode all songs in a folder to target bitrate | `None` |
-| `--fix-tags` | Fix fragmented albums across media libraries by unifying Album Artist | `None` |
+| `--fix-tags` | Harmonize Album Artist tags to fix fragmented albums | `None` |
+| `--dry-run` | Simulate tag repairs and display proposed changes without writing to disk | `False` |
+| `--no-recursive` | Scan only the specified folder, without checking subdirectories | `False` |
+| `--no-backup` | Skip creating a safety tag backup JSON snapshot before applying updates | `False` |
+| `--restore-tags` | Restore original audio tags from a Red Spindle tag backup JSON snapshot | `None` |
 | `--update-explicit` | Update existing songs in a folder to Explicit or Clean audio/lyrics | `None` |
 | `--no-redownload` | When updating explicit mode, only update tags/lyrics without re-downloading audio | `False` |
 | `--cd-prep` | Launch interactive CD Burn Prep & Song Curator tool | `False` |
@@ -231,18 +241,25 @@ Audio formats provide two separate artist metadata fields:
 * **Artist** (`TPE1` in MP3, `©ART` in M4A): The specific performer(s) on a single track.
 * **Album Artist** (`TPE2` in MP3, `aART` in M4A, `albumartist` in FLAC): The primary artist or group credited with the overall release.
 
-Media library managers—including Windows Media Player, iTunes, Apple Music, and mobile apps—index albums by pairing the album title with the `Album Artist`. If `Album Artist` is blank, players fall back to the track `Artist`. When featured guests differ across tracks, the player interprets each guest combination as a distinct artist, scattering the album into separate entries.
+Media library managers (including Windows Media Player, iTunes, Apple Music, and mobile apps) index albums by pairing the album title with the `Album Artist`. If `Album Artist` is blank, players fall back to the track `Artist`. When featured guests differ across tracks, the player interprets each guest combination as a distinct artist, scattering the album into separate entries.
 
 ### How Red Spindle Fixes This
 
 - **Automatic on Download**: All new downloads set the primary artist as the unified `Album Artist` while preserving guest credits in track titles and artist tags.
 - **Lossless Tag Repair for Existing Libraries**:
-  - **In the Desktop App**: In the **Download Folder** card, click **Fix Split Albums...** and select **Scan & Fix Album Tags**.
+  - **In the Desktop App**: In the **Download Folder** card, click **Fix Split Albums...**. Choose whether to scan subdirectories recursively, enable safety backup, or test with dry run, then click **Preview Changes** to inspect proposed updates before clicking **Apply Tag Fixes**.
   - **In the Terminal (CLI)**:
     ```powershell
-    python spotify_dl.py --fix-tags "C:\Users\mehul\Music\Spotify Downloads"
+    # Preview proposed changes in advance without touching files:
+    python spotify_dl.py --fix-tags "C:\Music" --dry-run
+
+    # Apply tag unification across nested library folders (creates safety backup):
+    python spotify_dl.py --fix-tags "C:\Music"
+
+    # Restore original tags at any time from a backup JSON snapshot:
+    python spotify_dl.py --restore-tags "C:\Music\.redspindle_tag_backup_<timestamp>.json"
     ```
-  This scans audio files and sets a uniform `Album Artist` tag across each album folder. Audio streams are untouched; only metadata is updated.
+  This scans audio files, clusters multi-artist releases, isolates distinct albums sharing identical titles (such as Queen's *Greatest Hits* versus ABBA's *Greatest Hits*), and sets uniform `Album Artist` tags. Audio streams remain untouched; only metadata headers are updated.
 
 ### Player-Specific Refresh Notes
 
