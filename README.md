@@ -12,7 +12,7 @@
   <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
 </p>
 
-Downloads Spotify playlists, albums, and tracks with ID3 metadata, album artwork, and synchronized lyrics. Generates standard `.lrc` files and embedded tags, prevents split albums across media libraries, curates songs for 700 MB CD-Rs, and creates 1:1 scale printable disc stickers.
+Downloads Spotify playlists, albums, and tracks with ID3 metadata, album artwork, and synchronized lyrics. Generates standard `.lrc` files and embedded tags, prevents split albums across media libraries, curates songs for 700 MB Data/MP3 CDs and 80-minute Audio CDs, and creates 1:1 scale printable disc stickers.
 
 <p align="center">
   <img src="assets/screenshot.png" alt="Red Spindle" width="550" />
@@ -65,7 +65,7 @@ Most media players (including Windows Media Player, Apple Music, iTunes, and mob
 - **Parallel Downloads**: Downloads 4 to 6 songs concurrently. Configurable in GUI and CLI.
 - **Universal Library & Tag Standards**: Native embedded lyrics, companion .lrc sidecars, unified Album Artist tags (prevents split albums), and standard content advisory metadata.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
-- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes SDL2 playback, album art display, session auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded export (`ThreadPoolExecutor`), and optional compression (192k/128k).
+- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto physical media (700 MB Data/MP3 CDs or 80-minute Red Book Audio CDs) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes SDL2 playback, album art display, session auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded export (`ThreadPoolExecutor`), and optional compression (192k/128k).
 - **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
   1. *Curved Polar Fan Mosaic*: Full-bleed wedges curved along the CD radius and arc that scale from the center hub to the outer rim.
   2. *Floating Concentric Tiles*: Tangentially rotated unwarped square covers arranged in concentric rings over a dark circular background.
@@ -293,11 +293,25 @@ If your music library occupies too much storage space (e.g. downloaded at 320 kb
 
 ## CD Burn Preparation and Smart Disc Splitting
 
-If you have a large library of downloaded songs and want to burn them onto standard 700 MB CD-Rs (such as Moser Baer white discs) or DVDs, Red Spindle includes an interactive "Tinder-style" curation and smart disc-splitting tool:
+Red Spindle includes an interactive curation and disc-splitting tool to prepare tracks for burning onto physical media (such as standard 700 MB / 80-minute CD-Rs or DVDs):
 
 <p align="center">
   <img src="assets/screenshot-cd-prep.png" alt="CD Burn Prep and Song Curator" width="550" />
 </p>
+
+### Understanding Disc Types: Data CD vs. Audio CD
+
+Before burning, identify which disc format your playback equipment requires:
+
+| Feature | Data CD (MP3 CD) | Standard Audio CD (Red Book CD-DA) |
+|---|---|---|
+| **Format** | Filesystem storage (ISO 9660 / Joliet / UDF) | Red Book audio sectors (IEC 60908, uncompressed 16-bit 44.1 kHz PCM) |
+| **Capacity Metric** | **File size** (up to ~700 MB per CD-R) | **Running time** (up to **80 minutes** per CD-R, or 74 minutes on older blanks) |
+| **Song Count** | ~100 to 180+ tracks (depending on selected bitrate) | ~15 to 20 tracks (regardless of source file bitrate) |
+| **Player Compatibility** | Requires MP3-compatible CD players, modern car stereos, DVD/Blu-ray players, or PCs | Plays on every standalone CD player, vintage Hi-Fi system, and car stereo |
+| **Burning Setting** | Select **Data CD** / **Data Disc** in your burning software | Select **Audio CD** in your burning software (software decodes files to PCM) |
+
+> **Important**: Red Spindle exports organized folders (`Disc 1`, `Disc 2`) containing audio files, `playlist.m3u`, and `disc_tracklist.txt`. It does not burn discs directly or generate raw `.iso` / `.bin` disc images. You burn the exported folders using standard burning software (Windows Media Player, CDBurnerXP, ImgBurn, or iTunes).
 
 ### Keyboard Curation Controls
 
@@ -316,15 +330,23 @@ If you have a large library of downloaded songs and want to burn them onto stand
 ### Smart Disc Packing and Exporting
 
 1. **In the Desktop App**:
-   - In the **Download Folder** card, click **CD Burn Prep...**.
-   - Review your songs one by one with album artwork, title, artist, duration, and original/compressed file size.
-   - Choose your **Target Quality** (e.g. `192 kbps` fits ~145-150 songs per disc, `128 kbps` fits ~215-220 songs per disc, or `Original`).
-   - The live status bar calculates your total disc requirements in real time as you make decisions (e.g. `Disc 1: 98 songs (688 MB / 690 MB) [FULL] | Disc 2: ...`).
-   - Your progress is automatically saved to `cd_curation_session.json` so you can close and resume anytime without losing your selections.
-   - Click **Export Disc Folders** to generate dedicated `Disc 1/`, `Disc 2/`, `Disc 3/` folders complete with track numbering (`01 - Artist - Title.mp3`), `playlist.m3u`, and `disc_tracklist.txt`.
-   - Burn each disc folder directly using Windows Media Player, ImgBurn, CDBurnerXP, or Nero!
+   - In the **Download Folder** card, click **CD Burn Prep & Curator...**.
+   - Review your tracks with embedded artwork, title, artist, running time, and estimated file size.
+   - Choose your **Disc Target**:
+     - **700 MB Data / MP3 CD**: Packs tracks by file size up to 690 MB (~120 to 180 songs).
+     - **80 Min Audio CD (CD-DA)**: Packs tracks by duration up to 78 minutes (~18 to 20 songs).
+     - **74 Min Audio CD (CD-DA)**: Packs tracks by duration up to 72 minutes (~15 to 18 songs).
+     - **4.7 GB Data DVD**: Packs tracks by file size up to 4.6 GB (800+ songs).
+   - If exporting a Data CD, select a **Target Quality** (e.g. `192 kbps` or `128 kbps`). For Audio CDs, audio compression does not increase disc capacity because CD-DA burns uncompressed audio.
+   - The status bar calculates disc requirements in real time as you make decisions (e.g. `Disc 1: 18 songs (74:10 / 78:00 limit) [FULL] | Disc 2: ...`).
+   - Progress auto-saves to `cd_curation_session.json` so you can close and resume without losing decisions.
+   - Click **Export Disc Folders** to generate `Disc 1/`, `Disc 2/`, etc., containing numbered tracks, `playlist.m3u`, and `disc_tracklist.txt`.
 
-2. **In the Terminal (CLI)**:
+2. **Burning Your Exported Discs**:
+   - **For Standard Audio CDs**: Open Windows Media Player, CDBurnerXP, or iTunes, choose **Audio CD**, drag the tracks from the `Disc` folder, and click **Burn**.
+   - **For Data / MP3 CDs**: Open your burning tool, choose **Data CD**, drag the tracks or playlist from the `Disc` folder, and click **Burn**.
+
+3. **In the Terminal (CLI)**:
    ```powershell
    python spotify_dl.py --cd-prep
    ```

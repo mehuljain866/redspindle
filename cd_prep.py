@@ -411,12 +411,19 @@ def calculate_disc_distribution(
     disc_capacity_mb: float = 700.0,
     target_bitrate: str = "192k",
     safe_margin_mb: float = 10.0,
+    is_audio_cd: bool = False,
+    max_audio_cd_minutes: float = 80.0,
 ) -> List[Dict]:
     """
-    Distributes selected tracks into disc buckets (Disc 1, Disc 2, ...)
-    ensuring each disc does not exceed (disc_capacity_mb - safe_margin_mb).
+    Distributes selected tracks into disc buckets (Disc 1, Disc 2, ...).
+    - If is_audio_cd=True: packs by time capacity (max_audio_cd_minutes, safe margin 2 mins).
+    - If is_audio_cd=False: packs by data size (disc_capacity_mb - safe_margin_mb).
     """
-    safe_capacity_bytes = int(max(50.0, disc_capacity_mb - safe_margin_mb) * 1024 * 1024)
+    if is_audio_cd:
+        safe_duration_s = max(60.0, (max_audio_cd_minutes - 2.0) * 60.0)
+    else:
+        safe_capacity_bytes = int(max(50.0, disc_capacity_mb - safe_margin_mb) * 1024 * 1024)
+
     discs = []
     current_tracks = []
     current_bytes = 0
@@ -424,15 +431,26 @@ def calculate_disc_distribution(
 
     for track in selected_tracks:
         est_size = estimate_track_size_bytes(track.get("duration", 0), track.get("size", 0), target_bitrate)
-        if current_bytes + est_size > safe_capacity_bytes and current_tracks:
+        track_dur = float(track.get("duration", 0.0))
+
+        if is_audio_cd:
+            exceeds = (current_duration + track_dur > safe_duration_s and current_tracks)
+        else:
+            exceeds = (current_bytes + est_size > safe_capacity_bytes and current_tracks)
+
+        if exceeds:
+            pct = (current_duration / (max_audio_cd_minutes * 60.0)) * 100.0 if is_audio_cd else (current_bytes / (disc_capacity_mb * 1024 * 1024)) * 100.0
             discs.append({
                 "disc_number": len(discs) + 1,
                 "tracks": current_tracks,
                 "total_bytes": current_bytes,
                 "total_mb": current_bytes / (1024 * 1024),
                 "total_duration_s": current_duration,
+                "total_duration_min": current_duration / 60.0,
                 "capacity_mb": disc_capacity_mb,
-                "percent_full": (current_bytes / (disc_capacity_mb * 1024 * 1024)) * 100.0,
+                "capacity_minutes": max_audio_cd_minutes if is_audio_cd else None,
+                "percent_full": pct,
+                "is_audio_cd": is_audio_cd,
             })
             current_tracks = []
             current_bytes = 0
@@ -440,17 +458,21 @@ def calculate_disc_distribution(
 
         current_tracks.append({**track, "est_size": est_size})
         current_bytes += est_size
-        current_duration += track.get("duration", 0)
+        current_duration += track_dur
 
     if current_tracks:
+        pct = (current_duration / (max_audio_cd_minutes * 60.0)) * 100.0 if is_audio_cd else (current_bytes / (disc_capacity_mb * 1024 * 1024)) * 100.0
         discs.append({
             "disc_number": len(discs) + 1,
             "tracks": current_tracks,
             "total_bytes": current_bytes,
             "total_mb": current_bytes / (1024 * 1024),
             "total_duration_s": current_duration,
+            "total_duration_min": current_duration / 60.0,
             "capacity_mb": disc_capacity_mb,
-            "percent_full": (current_bytes / (disc_capacity_mb * 1024 * 1024)) * 100.0,
+            "capacity_minutes": max_audio_cd_minutes if is_audio_cd else None,
+            "percent_full": pct,
+            "is_audio_cd": is_audio_cd,
         })
 
     return discs
@@ -607,19 +629,19 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         s_row = ctk.CTkFrame(h_inner, fg_color="transparent")
         s_row.pack(fill="x")
 
-        ctk.CTkLabel(s_row, text="Disc Size:", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray85").pack(side="left", padx=(0, 6))
-        self.disc_size_var = ctk.StringVar(value="700 MB (Moser Baer CD-R)")
+        ctk.CTkLabel(s_row, text="Disc Target:", font=ctk.CTkFont(size=11, weight="bold"), text_color="gray85").pack(side="left", padx=(0, 6))
+        self.disc_size_var = ctk.StringVar(value="700 MB Data / MP3 CD (~120-180 songs)")
         self.disc_size_menu = ctk.CTkOptionMenu(
             s_row,
             values=[
-                "700 MB (Moser Baer CD-R)",
-                "650 MB (74-Min CD-R)",
-                "800 MB (90-Min CD-R)",
-                "4.7 GB (Standard DVD-R)",
+                "700 MB Data / MP3 CD (~120-180 songs)",
+                "80 Min Audio CD (CD-DA, ~18-20 songs)",
+                "74 Min Audio CD (CD-DA, ~15-18 songs)",
+                "4.7 GB Data DVD (MP3, 800+ songs)",
             ],
             variable=self.disc_size_var,
             command=self._on_settings_change,
-            width=185,
+            width=230,
             height=28,
             fg_color="#2A2A2A",
             button_color="#333333",
@@ -1396,15 +1418,27 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
     # Disc Calculation & Packing Status
     # ──────────────────────────────────────────────────────────────────────────
 
+    def _is_audio_cd_mode(self) -> bool:
+        val = self.disc_size_var.get().lower()
+        return "audio cd" in val or "cd-da" in val
+
     def _get_selected_disc_mb(self) -> float:
-        val = self.disc_size_var.get()
-        m = re.search(r"(\d+(?:\.\d+)?)", val)
-        if not m:
+        val = self.disc_size_var.get().lower()
+        if "gb" in val:
+            m = re.search(r"(\d+(?:\.\d+)?)", val)
+            return float(m.group(1)) * 1024.0 if m else 4700.0
+        if "74" in val:
+            return 650.0
+        if "80" in val:
             return 700.0
-        num = float(m.group(1))
-        if "gb" in val.lower():
-            return num * 1024.0
-        return num
+        m = re.search(r"(\d+(?:\.\d+)?)", val)
+        return float(m.group(1)) if m else 700.0
+
+    def _get_selected_audio_cd_minutes(self) -> float:
+        val = self.disc_size_var.get().lower()
+        if "74" in val:
+            return 74.0
+        return 80.0
 
     def _get_selected_bitrate(self) -> str:
         val = self.bitrate_var.get().lower()
@@ -1421,36 +1455,69 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         selected_tracks = [t for t in self.all_tracks if self.selections.get(t["path"]) == "selected"]
         disc_mb = self._get_selected_disc_mb()
         bitrate = self._get_selected_bitrate()
+        is_audio_cd = self._is_audio_cd_mode()
+        max_mins = self._get_selected_audio_cd_minutes()
 
-        discs = calculate_disc_distribution(selected_tracks, disc_mb, bitrate, safe_margin_mb=10.0)
-        total_songs = len(selected_tracks)
-        total_bytes = sum(d["total_bytes"] for d in discs)
-        total_mb = total_bytes / (1024 * 1024)
-        num_discs = len(discs)
-
-        self.disc_summary_label.configure(
-            text=f"Selected: {total_songs} songs ({total_mb:.1f} MB)  |  Discs Needed: {num_discs} {'Disc' if num_discs == 1 else 'Discs'}"
+        discs = calculate_disc_distribution(
+            selected_tracks,
+            disc_capacity_mb=disc_mb,
+            target_bitrate=bitrate,
+            safe_margin_mb=10.0,
+            is_audio_cd=is_audio_cd,
+            max_audio_cd_minutes=max_mins,
         )
+        total_songs = len(selected_tracks)
+        num_discs = len(discs)
+        total_dur_s = sum(t.get("duration", 0) for t in selected_tracks)
+        total_m, total_s = divmod(int(total_dur_s), 60)
 
-        if not discs:
-            self.disc_detail_label.configure(text=f"Disc 1: 0 MB / {disc_mb-10:.0f} MB (0% full)")
-        else:
-            latest_disc = discs[-1]
-            status = "[FULL]" if latest_disc["percent_full"] >= 98 else "[IN PROGRESS]"
-            self.disc_detail_label.configure(
-                text=f"Disc {latest_disc['disc_number']}: {len(latest_disc['tracks'])} songs ({latest_disc['total_mb']:.1f} MB / {disc_mb-10:.0f} MB) {status}"
+        if is_audio_cd:
+            self.disc_summary_label.configure(
+                text=f"Selected: {total_songs} songs ({total_m}:{total_s:02d} total audio)  |  Audio CDs Needed: {num_discs} {'Disc' if num_discs == 1 else 'Discs'}"
             )
+            if not discs:
+                self.disc_detail_label.configure(text=f"Disc 1: 0:00 / {max_mins:.0f}:00 Audio CD limit (0% full)")
+            else:
+                latest_disc = discs[-1]
+                status = "[FULL]" if latest_disc["percent_full"] >= 96 else "[IN PROGRESS]"
+                d_m, d_s = divmod(int(latest_disc["total_duration_s"]), 60)
+                self.disc_detail_label.configure(
+                    text=f"Disc {latest_disc['disc_number']}: {len(latest_disc['tracks'])} songs ({d_m}:{d_s:02d} / {max_mins-2:.0f}:00 safe limit) {status}"
+                )
+        else:
+            total_bytes = sum(d["total_bytes"] for d in discs)
+            total_mb = total_bytes / (1024 * 1024)
+            self.disc_summary_label.configure(
+                text=f"Selected: {total_songs} songs ({total_mb:.1f} MB)  |  Data CDs Needed: {num_discs} {'Disc' if num_discs == 1 else 'Discs'}"
+            )
+            if not discs:
+                self.disc_detail_label.configure(text=f"Disc 1: 0 MB / {disc_mb-10:.0f} MB (0% full)")
+            else:
+                latest_disc = discs[-1]
+                status = "[FULL]" if latest_disc["percent_full"] >= 98 else "[IN PROGRESS]"
+                self.disc_detail_label.configure(
+                    text=f"Disc {latest_disc['disc_number']}: {len(latest_disc['tracks'])} songs ({latest_disc['total_mb']:.1f} MB / {disc_mb-10:.0f} MB) {status}"
+                )
 
     def _get_track_disc_target(self, track: Dict) -> str:
         selected_tracks = [t for t in self.all_tracks if self.selections.get(t["path"]) == "selected"]
         disc_mb = self._get_selected_disc_mb()
         bitrate = self._get_selected_bitrate()
+        is_audio_cd = self._is_audio_cd_mode()
+        max_mins = self._get_selected_audio_cd_minutes()
 
         is_already_selected = self.selections.get(track["path"]) == "selected"
         if not is_already_selected:
             selected_tracks.append(track)
 
-        discs = calculate_disc_distribution(selected_tracks, disc_mb, bitrate, safe_margin_mb=10.0)
+        discs = calculate_disc_distribution(
+            selected_tracks,
+            disc_capacity_mb=disc_mb,
+            target_bitrate=bitrate,
+            safe_margin_mb=10.0,
+            is_audio_cd=is_audio_cd,
+            max_audio_cd_minutes=max_mins,
+        )
         if not discs:
             return "Target: Disc 1"
 
@@ -1472,27 +1539,54 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             messagebox.showwarning("No Songs Selected", "You have not selected any songs yet.\nUse Right/Up arrow to select songs before exporting.")
             return
 
+        is_audio_cd = self._is_audio_cd_mode()
+        max_mins = self._get_selected_audio_cd_minutes()
         disc_mb = self._get_selected_disc_mb()
         bitrate = self._get_selected_bitrate()
-        discs = calculate_disc_distribution(selected_tracks, disc_mb, bitrate, safe_margin_mb=10.0)
+        discs = calculate_disc_distribution(
+            selected_tracks,
+            disc_capacity_mb=disc_mb,
+            target_bitrate=bitrate,
+            safe_margin_mb=10.0,
+            is_audio_cd=is_audio_cd,
+            max_audio_cd_minutes=max_mins,
+        )
 
         out_dir = Path(self.out_entry.get().strip()).expanduser().resolve()
+        disc_type_str = f"Standard Audio CD (CD-DA, {max_mins:.0f}-Min)" if is_audio_cd else f"Data / MP3 CD ({disc_mb:.0f} MB)"
         confirm_msg = (
             f"Ready to export {len(selected_tracks)} songs across {len(discs)} Disc folders:\n\n"
             f"Destination: {out_dir}\n"
-            f"Target Quality: {self.bitrate_var.get()}\n"
-            f"Disc Capacity: {disc_mb:.0f} MB (Moser Baer CD-R)\n\n"
+            f"Disc Type: {disc_type_str}\n"
+            f"Target Quality: {self.bitrate_var.get()}\n\n"
         )
         for d in discs:
-            confirm_msg += f"• Disc {d['disc_number']}: {len(d['tracks'])} songs ({d['total_mb']:.1f} MB)\n"
+            d_m, d_s = divmod(int(d["total_duration_s"]), 60)
+            if is_audio_cd:
+                confirm_msg += f"• Disc {d['disc_number']}: {len(d['tracks'])} songs ({d_m}:{d_s:02d} / {max_mins:.0f} min limit)\n"
+            else:
+                confirm_msg += f"• Disc {d['disc_number']}: {len(d['tracks'])} songs ({d['total_mb']:.1f} MB)\n"
 
-        confirm_msg += "\nProceed with disc creation?"
+        if is_audio_cd:
+            confirm_msg += (
+                f"\nIMPORTANT BURNING NOTE:\n"
+                f"When burning in Windows Media Player, CDBurnerXP, or iTunes, select 'Audio CD' (not Data CD).\n"
+                f"Your burning software will decode the files into Red Book PCM audio sectors playable on any CD player."
+            )
+        else:
+            confirm_msg += (
+                f"\nIMPORTANT BURNING NOTE:\n"
+                f"These folders are packed as Data / MP3 CDs (file storage).\n"
+                f"Burn as a 'Data CD' in your burning software. Requires an MP3-compatible CD player or car stereo."
+            )
+
+        confirm_msg += "\n\nProceed with disc folder export?"
         if not messagebox.askyesno("Confirm Disc Export", confirm_msg):
             return
 
-        self._start_export_process(discs, out_dir, bitrate)
+        self._start_export_process(discs, out_dir, bitrate, is_audio_cd=is_audio_cd, max_mins=max_mins)
 
-    def _start_export_process(self, discs: List[Dict], out_dir: Path, bitrate: str):
+    def _start_export_process(self, discs: List[Dict], out_dir: Path, bitrate: str, is_audio_cd: bool = False, max_mins: float = 80.0):
         # Progress Dialog
         p_win = ctk.CTkToplevel(self)
         p_win.title("Exporting Disc Folders")
@@ -1532,11 +1626,22 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                         p_win.destroy()
                         self._is_exporting = False
                         if not self._cancel_export:
-                            messagebox.showinfo(
-                                "Discs Ready to Burn!",
-                                f"Successfully created {len(discs)} Disc folders in:\n{out_dir}\n\n"
-                                f"Each folder contains a playlist.m3u and tracklist.txt and fits cleanly onto 700 MB CD-Rs!"
-                            )
+                            if is_audio_cd:
+                                instr = (
+                                    f"Successfully created {len(discs)} Audio CD folders in:\n{out_dir}\n\n"
+                                    f"Each disc contains under {max_mins:.0f} minutes of music.\n\n"
+                                    f"How to burn for traditional/vintage CD players:\n"
+                                    f"1. Open Windows Media Player, CDBurnerXP, or iTunes.\n"
+                                    f"2. Select 'Audio CD' mode (not Data CD).\n"
+                                    f"3. Drag all tracks from the Disc folder into your burning list and click Burn."
+                                )
+                            else:
+                                instr = (
+                                    f"Successfully created {len(discs)} Data CD folders in:\n{out_dir}\n\n"
+                                    f"Each disc fits under 700 MB for MP3-compatible CD players.\n\n"
+                                    f"Burn as a 'Data CD' in your burning software."
+                                )
+                            messagebox.showinfo("Discs Ready to Burn!", instr)
                             self._open_output_folder()
                         return
                     elif kind == "ERROR":
@@ -1610,11 +1715,15 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                         disc_num = disc["disc_number"]
                         disc_folder = out_dir / f"Disc {disc_num}"
                         m3u_lines = ["#EXTM3U\n"]
+                        disc_type_tag = f"Audio CD (CD-DA, {max_mins:.0f}-Min)" if is_audio_cd else f"Data / MP3 CD ({disc['capacity_mb']:.0f} MB)"
+                        d_m, d_s = divmod(int(disc["total_duration_s"]), 60)
                         tracklist_lines = [
                             f"==================================================",
-                            f"  Red Spindle - Disc {disc_num}",
-                            f"  Total Tracks: {len(disc['tracks'])}",
-                            f"  Total Size  : {disc['total_mb']:.1f} MB / {disc['capacity_mb']:.0f} MB",
+                            f"  Red Spindle - Disc {disc_num} ({disc_type_tag})",
+                            f"  Total Tracks  : {len(disc['tracks'])}",
+                            f"  Total Duration: {d_m}:{d_s:02d}",
+                            f"  Total Size    : {disc['total_mb']:.1f} MB",
+                            f"  Disc Format   : {disc_type_tag}",
                             f"==================================================\n",
                         ]
 

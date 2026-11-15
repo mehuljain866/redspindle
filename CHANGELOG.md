@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Automated Safety Tag Backup & Restoration**:
   - Generates a timestamped `.redspindle_tag_backup_<timestamp>.json` snapshot recording original tag states prior to modifying any file.
   - Added `--restore-tags <backup.json>` CLI command to revert tag modifications back to their exact previous state.
+- **Data CD (MP3 CD) vs. Audio CD (CD-DA) Distinction & Sizing**:
+  - Added dedicated disc targets in CD Burn Prep for **80-minute** and **74-minute** Red Book Audio CDs alongside 700 MB Data / MP3 CDs.
+  - Audio CD mode packs tracks by duration (up to 78 minutes safe limit, ~18–20 tracks), while Data CD mode packs by byte size (up to 690 MB, ~120–180 tracks).
+  - UI export prompts, manifests, tracklists, and documentation explicitly explain the technical differences and player requirements for burning Data vs. Audio CDs.
 
 ### Changed
 - **Neutralized Split Album Dialog Copy**:
