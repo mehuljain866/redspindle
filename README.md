@@ -12,7 +12,7 @@
   <a href="#cd-and-grid-art-studio-stickers-and-collages"><img src="https://img.shields.io/badge/CD%20Sticker%20Studio-300%20DPI%20Print-00897B?style=flat" alt="CD Sticker Studio" /></a>
 </p>
 
-A fast, modern desktop music downloader, iPod library harmonizer, and physical CD studio engineered for **Apple Music, iTunes, and iPod users** as well as **CD burning & disc art enthusiasts**. Downloads Spotify playlists, albums, and tracks with **zero split albums** on iOS/iPods, embedded synchronized lyrics, pristine high-resolution album artwork, smart disc-capacity curation, and 1:1 scale printable disc stickers.
+Downloads Spotify playlists, albums, and tracks with ID3 metadata, album artwork, and synchronized lyrics. Generates standard `.lrc` files and embedded tags, prevents split albums on Apple Music and iPods, curates songs for 700 MB CD-Rs, and creates 1:1 scale printable disc stickers.
 
 <p align="center">
   <img src="assets/screenshot.png" alt="Red Spindle" width="550" />
@@ -50,32 +50,32 @@ Prefer a portable single-file app without installing Python? Download from [**La
 
 ## Built for Apple Music, iTunes, and iPods
 
-Most generic music downloaders create major headaches when importing into iTunes, Apple Music, or syncing to an iPod. **Red Spindle** solves these issues out of the box:
+Importing downloads into iTunes, Apple Music, or syncing to an iPod often introduces tagging and display problems. Red Spindle addresses these directly:
 
-- **Zero Split Albums (Unified Album Artist)**: On Apple Music and iPods, albums with guest features (e.g. Gorillaz feat. Snoop Dogg) notoriously splinter into multiple separate 1-song albums. Red Spindle automatically unifies the `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) across every track so albums stay intact under one unified album card.
-- **Embedded Synchronized Lyrics for iOS and iPod**: External `.lrc` files are completely ignored by Apple Music and iPods. Red Spindle queries LRCLIB and embeds lyrics directly into the audio metadata (`USLT` for MP3, `©lyr` for M4A). On your iPhone or iPod touch (iOS 7 through iOS 18), tap the album artwork while playing to reveal the synchronized lyrics overlay.
-- **iPod-Optimized 640x640 Artwork**: Oversized, interlaced, or progressive cover images cause lag, memory crashes, or black squares on vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Every track receives a clean, standardized 640&times;640 baseline JPEG cover that loads instantly.
-- **Official Apple Advisory Badges**: Injects iTunes `rtng` advisory metadata so your tracks display official `[E]` (Explicit) or `[Clean]` badges in Apple Music and iTunes.
-- **100% Lossless Existing Library Fixer**: Already have a huge music folder plagued by split albums? Click **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to harmonize your entire collection in seconds without re-compressing the audio.
+- **Unified Album Artist (Prevents Split Albums)**: On Apple Music and iPods, tracks with guest artists (for example, Gorillaz featuring Snoop Dogg) often separate into multiple 1-song albums. Red Spindle sets a unified `Album Artist` tag (`TPE2` in MP3, `aART` in M4A) while keeping individual track artist credits, keeping albums intact.
+- **Embedded Lyrics for Players Without Sidecar Support**: While standard players use separate `.lrc` files, Apple Music and iPods only display lyrics embedded directly in file metadata (`USLT` for MP3, `©lyr` for M4A). Red Spindle embeds these tags so tapping the album artwork on iOS 7–18 shows the lyrics.
+- **iPod-Compatible 640x640 Artwork**: Progressive or high-resolution JPEGs can crash vintage click-wheel iPods (iPod Video 5th gen, Classic 6th/7th gen, iPod Nano). Covers are saved as standard 640&times;640 baseline JPEGs.
+- **Advisory Badges**: Adds iTunes `rtng` advisory metadata so tracks show official `[E]` (Explicit) or `[Clean]` badges in Apple Music and iTunes.
+- **Library Tag Repair Tool**: Click **Fix Split Albums...** in the app or run `python spotify_dl.py --fix-tags "path/to/music"` to fix Album Artist tags across existing folders without re-encoding audio.
 
 ---
 
 ## Features
 
-- **Blazing Fast Parallel Downloads**: Download up to 4 or 6 songs at the same time concurrently for up to 5x faster downloads. Configurable in the GUI and CLI.
+- **Parallel Downloads**: Downloads 4 to 6 songs concurrently. Configurable in GUI and CLI.
 - **iPod and Apple Music Ready**: Native embedded lyrics, unified Album Artist tags (no split albums), and iTunes advisory ratings out of the box.
 - **Explicit vs Clean Radio Edit Modes**: Choose whether to download original uncensored tracks or official clean radio edits with profanities filtered from embedded lyrics.
-- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes high-fidelity SDL2 playback, album art display, session JSON auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded parallel export (`ThreadPoolExecutor`), and optional compression (192k/128k).
-- **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate high-resolution 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
-  1. *Curved Polar Fan Mosaic*: 100% full-bleed wedges curved along the CD radius and arc that scale smoothly from the center hub to the outer rim.
-  2. *Floating Concentric Tiles*: Tangentially rotated unwarped square covers arranged in concentric rings over a sleek vinyl backdrop.
+- **Interactive CD Burn Prep & Song Curator**: Curate songs for burning onto standard 700 MB CD-Rs (Moser Baer) using keyboard arrow keys (Up = Keep, Down = Skip, Right = +5s/+10s, Left = -5s/-10s, Space = Pause/Play). Includes SDL2 playback, album art display, session auto-saving, automatic disc splitting into Disc 1, Disc 2, Disc 3 folders, multi-threaded export (`ThreadPoolExecutor`), and optional compression (192k/128k).
+- **CD & Grid Art Studio (Sticker & Cover Generator)**: Generate 300 DPI printable CD label stickers and album art collages directly from any music folder or curated disc folder. Supports three layout styles:
+  1. *Curved Polar Fan Mosaic*: Full-bleed wedges curved along the CD radius and arc that scale from the center hub to the outer rim.
+  2. *Floating Concentric Tiles*: Tangentially rotated unwarped square covers arranged in concentric rings over a dark circular background.
   3. *Any-by-Any Grid*: Auto-optimum or custom $R \times C$ grids for CD jewel case front covers (120x120mm), back tray inserts (150x118mm), posters, and wallpapers with custom tile spacing and corner rounding.
-  Includes live interactive preview, custom center hub typography, 15mm/40mm spindle cutouts, cutting guides, 1:1 scale printable A4 sheets, and 1-click clipboard copy.
-- **Synchronized Lyrics for Apple Music and iOS**: Automatically queries LRCLIB and embeds lyrics directly into ID3 tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC). On iOS 7+ and Apple Music, simply tap the album artwork on the player screen to view the lyrics. Companion `.lrc` files are also generated.
+  Includes interactive live preview, custom center hub typography, 15mm/40mm spindle cutouts, cutting guides, 1:1 scale printable A4 sheets, and 1-click clipboard copy.
+- **Synchronized Lyrics (.lrc and Embedded Tags)**: Fetches synced lyrics from LRCLIB and writes standard timestamped `.lrc` files alongside each song for players that read sidecar files (Android apps, desktop players, DAPs). Also embeds lyrics into metadata tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC) for Apple Music and iTunes.
 - **Hindi and Hinglish Lyrics Transliteration**: Choose between Romanized Hinglish (Hindi words in English alphabet for easy singing along), native Devanagari Hindi script, or unmodified database original. Built-in transliteration intelligently converts Devanagari lyrics and timestamps to Latin characters.
 - **Official iTunes Advisory Badges**: Tags songs with Apple Music advisory ratings (`[E]` for Explicit uncensored and `[Clean]` for clean radio edits).
 - **Consolidates Split Albums (Apple Music / iTunes)**: Prevents albums with guest singers (e.g. Gorillaz feat. Snoop Dogg) from splitting into multiple separate 1-song albums on Apple Music and iOS. Unifies `Album Artist` (`TPE2` / `aART`) while keeping individual track artist credits. Includes a 100% lossless repair tool for existing libraries.
-- **Audio Downsizing and Storage Optimizer**: Downsize existing music files to 128k, 160k, or 192k to save massive storage space (up to 60% reduction) with a smart filter that only suggests bitrates lower than your current files. Preserves 100% of ID3 metadata and album art.
+- **Audio Downsizing**: Converts existing library tracks to 128k, 160k, or 192k to reduce file size while preserving ID3 tags and album artwork. The selector only lists bitrates lower than your source files.
 - **Simple and Clean UI**: Enter or paste a link, pick your folder, choose your settings, click **Start Download**, and watch real-time progress.
 - **Desktop Shortcut**: Double-click the **Red Spindle** icon on your Desktop to launch directly without opening a terminal.
 - **Unlimited Playlist Length**: Handles playlists with 100, 200, 500+ tracks automatically without capping or truncation.
@@ -148,7 +148,7 @@ python spotify_dl.py --update-explicit "C:\Music\MyPlaylist" --explicit-mode cle
 
 ## Explicit vs Clean Audio and Lyrics Management
 
-Red Spindle gives you full control over whether to download uncensored explicit tracks or radio edits, and automatically embeds synchronized lyrics into your files for Apple Music and iOS.
+Red Spindle supports downloading uncensored explicit tracks or clean radio edits, and saves synchronized lyrics both as standard `.lrc` files and as embedded metadata tags.
 
 <p align="center">
   <img src="assets/screenshot-explicit.png" alt="Explicit and Clean Audio / Lyrics Manager" width="550" />
@@ -160,8 +160,8 @@ Red Spindle gives you full control over whether to download uncensored explicit 
    - In **Download Settings**, select **Audio Version**:
      - **Explicit (Uncensored)**: Downloads the original uncensored audio stream and unabridged lyrics.
      - **Clean (Radio Edit)**: Downloads the official radio edit audio stream and automatically censors profanities in the embedded lyrics.
-   - Keep **Embed lyrics into songs (Apple Music / iOS)** checked to automatically embed lyrics (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC) and companion `.lrc` files.
-   - On iOS 7+ and Apple Music, tapping the album artwork on the player screen instantly displays the embedded lyrics.
+   - Keep **Fetch lyrics (.lrc file & embedded tags)** checked to generate standard `.lrc` files and embed lyrics tags (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC).
+   - Tapping the album artwork on iOS 7–18 or Apple Music displays the embedded lyrics.
 
 2. **In the Terminal (CLI)**:
    ```powershell
@@ -180,7 +180,7 @@ If you already downloaded songs and want to switch them between Explicit and Cle
    - In the **Download Folder** card, click **Explicit & Lyrics...**.
    - Choose your **Target Version** (`Clean (Radio Edit)` or `Explicit (Uncensored)`).
    - Check **Re-download audio when version differs** to swap explicit audio for clean radio edit audio (or vice-versa) while keeping album artwork and metadata intact.
-   - Check **Fetch & embed lyrics into song tags** to fetch lyrics and embed them into the files.
+   - Check **Fetch lyrics (standard .lrc file & embedded tags)** to download lyrics and embed them into the files.
    - Click **Start Updating Library**.
 
 2. **In the Terminal (CLI)**:
@@ -192,11 +192,11 @@ If you already downloaded songs and want to switch them between Explicit and Cle
    python spotify_dl.py --update-explicit "C:\Users\mehul\Music\Spotify Downloads" --explicit-mode explicit --no-redownload
    ```
 
-### Lyrics on Apple Music and iOS
+### Synchronized Lyrics (.lrc Files and Embedded Tags)
 
-- **Format Support**: Embedded into ID3 tags via `USLT` (Unsynchronized Lyrics) for MP3, `©lyr` for M4A, and `lyrics` for FLAC.
-- **How to View on iPhone**: Open the Music app on your iPhone or iPod (iOS 7.1.2 through iOS 18), start playing a song, and tap once on the large album cover art on the player screen. The lyrics will overlay seamlessly over the cover.
-- **Companion `.lrc`**: A timestamped `.lrc` file is also created alongside each song for third-party media players that support synchronized karaoke-style scrolling lyrics.
+- **Universal `.lrc` Files**: Generates a standard timestamped `.lrc` file alongside every track. Supported by Android music players (Poweramp, Musicolet, Retro Music), desktop players (Foobar2000, VLC, AIMP), and dedicated DAP media players for scrolling synchronized lyrics.
+- **Embedded Tag Support**: Simultaneously embeds lyrics directly into audio metadata (`USLT` for MP3, `©lyr` for M4A, `lyrics` for FLAC). This allows players that do not read external sidecar files (such as Apple Music, iTunes, classic iPods, and in-car head units) to display lyrics.
+- **Viewing on iPhone/iPod**: Open the Music app on iOS (iOS 7.1.2 through iOS 18), play a song, and tap the album cover on the player screen to show the lyrics overlay.
 
 ### Hindi and Hinglish Lyrics Preference
 
@@ -324,13 +324,13 @@ Once your songs are curated or burned, generate high-resolution printable circul
 ### Layout Styles
 
 - **Style 1: Curved Polar Fan Mosaic (CD Disc)**:
-  - 100% full-bleed coverage with zero blank space.
-  - Mathematically maps each album cover into an annular wedge curving along the circular disc radius.
-  - Dynamically scales cells from compact near the center spindle to large at the outer rim.
+  - Full-bleed coverage without margins.
+  - Maps each album cover into an annular wedge curving along the circular disc radius.
+  - Scales cells from compact near the center spindle to larger at the outer rim.
 - **Style 2: Floating Concentric Tiles (CD Disc)**:
-  - Preserves original unwarped square album cover aspect ratios.
-  - Arranged in concentric rings rotated tangentially around the center hub over a sleek dark vinyl backdrop.
-  - Scales tile dimensions smoothly from inner hub to outer perimeter.
+  - Preserves square album cover aspect ratios without radial distortion.
+  - Arranged in concentric rings rotated tangentially around the center hub over a dark circular background.
+  - Scales tile dimensions from inner hub to outer perimeter.
 - **Style 3: Any-by-Any Grid (Jewel Case Inserts and Posters)**:
   - **Auto-Optimum Grid**: Automatically calculates the most balanced square/rectangular grid for your song count (e.g. 100 songs &rarr; 10&times;10).
   - **Custom Dimensions**: Enter any custom Rows &times; Columns.
@@ -348,4 +348,4 @@ Once your songs are curated or burned, generate high-resolution printable circul
 
 ## Changelog
 
-For the complete release history, feature additions, and roadmap milestones, see [CHANGELOG.md](CHANGELOG.md).
+For the complete release history and update notes, see [CHANGELOG.md](CHANGELOG.md).

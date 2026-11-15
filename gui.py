@@ -459,7 +459,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         self.embed_lyrics_var = ctk.BooleanVar(value=self.saved_config.get("embed_lyrics", True))
         self.embed_lyrics_checkbox = ctk.CTkCheckBox(
             lyr_frame,
-            text="Embed lyrics into songs (Apple Music / iOS)",
+            text="Fetch lyrics (.lrc file & embedded tags)",
             variable=self.embed_lyrics_var,
             font=ctk.CTkFont(size=12),
             checkmark_color="#000000",
@@ -1761,7 +1761,7 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
         self.embed_lyrics_var = ctk.BooleanVar(value=True)
         self.embed_lyrics_cb = ctk.CTkCheckBox(
             s_inner,
-            text="Fetch & embed lyrics into song tags (USLT / Apple Music) and save .lrc",
+            text="Fetch lyrics (standard .lrc file & embedded tags)",
             variable=self.embed_lyrics_var,
             font=ctk.CTkFont(size=12),
             checkmark_color="#000000",
