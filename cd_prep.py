@@ -1626,23 +1626,44 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                         p_win.destroy()
                         self._is_exporting = False
                         if not self._cancel_export:
-                            if is_audio_cd:
-                                instr = (
-                                    f"Successfully created {len(discs)} Audio CD folders in:\n{out_dir}\n\n"
-                                    f"Each disc contains under {max_mins:.0f} minutes of music.\n\n"
-                                    f"How to burn for traditional/vintage CD players:\n"
-                                    f"1. Open Windows Media Player, CDBurnerXP, or iTunes.\n"
-                                    f"2. Select 'Audio CD' mode (not Data CD).\n"
-                                    f"3. Drag all tracks from the Disc folder into your burning list and click Burn."
+                            summary = arg1 if isinstance(arg1, dict) else {}
+                            failed_cnt = summary.get("failed", 0)
+                            succ_cnt = summary.get("succeeded", 0)
+                            total_cnt = summary.get("total", 0)
+
+                            if failed_cnt > 0:
+                                failed_sample = "\n".join(f"  * {name}: {err}" for name, err in summary.get("failed_tasks", [])[:6])
+                                if failed_cnt > 6:
+                                    failed_sample += f"\n  ... and {failed_cnt - 6} more"
+                                warn_msg = (
+                                    f"Export completed with warnings:\n"
+                                    f"  * Succeeded: {succ_cnt} / {total_cnt} tracks\n"
+                                    f"  * Failed: {failed_cnt} tracks\n\n"
+                                    f"Playlists and tracklists were generated using only successfully exported tracks.\n\n"
+                                    f"Failed tracks:\n{failed_sample}"
                                 )
+                                messagebox.showwarning("Export Completed with Warnings", warn_msg)
+                                self._open_output_folder()
+                            elif succ_cnt == 0 and total_cnt > 0:
+                                messagebox.showerror("Export Failed", f"None of the {total_cnt} tracks could be exported.")
                             else:
-                                instr = (
-                                    f"Successfully created {len(discs)} Data CD folders in:\n{out_dir}\n\n"
-                                    f"Each disc fits under 700 MB for MP3-compatible CD players.\n\n"
-                                    f"Burn as a 'Data CD' in your burning software."
-                                )
-                            messagebox.showinfo("Discs Ready to Burn!", instr)
-                            self._open_output_folder()
+                                if is_audio_cd:
+                                    instr = (
+                                        f"Successfully created {len(discs)} Audio CD folders in:\n{out_dir}\n\n"
+                                        f"Each disc contains under {max_mins:.0f} minutes of music ({succ_cnt} tracks total).\n\n"
+                                        f"How to burn for traditional/vintage CD players:\n"
+                                        f"1. Open Windows Media Player, CDBurnerXP, or iTunes.\n"
+                                        f"2. Select 'Audio CD' mode (not Data CD).\n"
+                                        f"3. Drag all tracks from the Disc folder into your burning list and click Burn."
+                                    )
+                                else:
+                                    instr = (
+                                        f"Successfully created {len(discs)} Data CD folders in:\n{out_dir}\n\n"
+                                        f"Each disc fits under 700 MB for MP3-compatible CD players ({succ_cnt} tracks total).\n\n"
+                                        f"Burn as a 'Data CD' in your burning software."
+                                    )
+                                messagebox.showinfo("Discs Ready to Burn!", instr)
+                                self._open_output_folder()
                         return
                     elif kind == "ERROR":
                         p_win.destroy()
@@ -1659,18 +1680,32 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
 
         def _worker():
             from concurrent.futures import ThreadPoolExecutor, as_completed
+            from collections import defaultdict
             total_songs = sum(len(d["tracks"]) for d in discs)
             processed_count = 0
+            successful_tasks = []
+            failed_tasks = []
 
             try:
                 out_dir.mkdir(parents=True, exist_ok=True)
 
-                # Pre-assemble all transfer/transcode tasks
+                # Pre-assemble all transfer/transcode tasks and clean target folders
                 tasks = []
                 for disc in discs:
                     disc_num = disc["disc_number"]
                     disc_folder = out_dir / f"Disc {disc_num}"
-                    disc_folder.mkdir(parents=True, exist_ok=True)
+                    if disc_folder.exists():
+                        for old_file in list(disc_folder.iterdir()):
+                            if old_file.is_file() and (
+                                old_file.suffix.lower() in (".mp3", ".m4a", ".flac", ".opus", ".wav", ".m3u", ".txt")
+                                or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
+                            ):
+                                try:
+                                    old_file.unlink()
+                                except OSError:
+                                    pass
+                    else:
+                        disc_folder.mkdir(parents=True, exist_ok=True)
 
                     for t_idx, track in enumerate(disc["tracks"], 1):
                         src_p = Path(track["path"])
@@ -1681,19 +1716,29 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
 
                 def _execute_task(task):
                     if self._cancel_export:
-                        return task, False
+                        return task, False, "Export cancelled"
                     disc_num, t_idx, track, src_p, dest_p, dest_filename = task
                     try:
                         if bitrate.lower() in ("original", "keep as-is", "none") or not transcode_audio_file:
                             shutil.copy2(src_p, dest_p)
+                            return task, True, None
                         else:
                             ok = transcode_audio_file(src_p, dest_p, target_bitrate=bitrate)
-                            if not ok or not dest_p.exists():
-                                shutil.copy2(src_p, dest_p)
-                        return task, True
+                            if not ok or not dest_p.exists() or dest_p.stat().st_size == 0:
+                                if dest_p.exists():
+                                    try:
+                                        dest_p.unlink()
+                                    except OSError:
+                                        pass
+                                return task, False, f"Transcoding failed for {src_p.name}"
+                            return task, True, None
                     except Exception as e:
-                        print(f"[CDPrep] Task error {src_p.name}: {e}")
-                        return task, False
+                        if dest_p.exists():
+                            try:
+                                dest_p.unlink()
+                            except OSError:
+                                pass
+                        return task, False, str(e)
 
                 # Run parallel transfers with worker pool
                 max_workers = min(8, max(2, (os.cpu_count() or 4)))
@@ -1702,38 +1747,52 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                     for fut in as_completed(futures):
                         if self._cancel_export:
                             break
-                        task, ok = fut.result()
+                        task, ok, err_msg = fut.result()
                         processed_count += 1
                         pct = processed_count / max(1, total_songs)
                         disc_num, t_idx, track, src_p, dest_p, dest_filename = task
+                        if ok:
+                            successful_tasks.append(task)
+                        else:
+                            failed_tasks.append((task, err_msg))
                         msg = f"Exporting [{processed_count}/{total_songs}]: {track['title']} - {track['artist']}"
                         progress_queue.put(("PROGRESS", msg, pct))
 
                 if not self._cancel_export:
-                    # Write playlists and tracklists in exact numerical order
+                    success_by_disc = defaultdict(list)
+                    for task in successful_tasks:
+                        success_by_disc[task[0]].append(task)
+                    for disc_num in success_by_disc:
+                        success_by_disc[disc_num].sort(key=lambda t: t[1])
+
+                    # Write playlists and tracklists using only successfully exported tracks
                     for disc in discs:
                         disc_num = disc["disc_number"]
                         disc_folder = out_dir / f"Disc {disc_num}"
+                        disc_tasks = success_by_disc.get(disc_num, [])
+
                         m3u_lines = ["#EXTM3U\n"]
                         disc_type_tag = f"Audio CD (CD-DA, {max_mins:.0f}-Min)" if is_audio_cd else f"Data / MP3 CD ({disc['capacity_mb']:.0f} MB)"
-                        d_m, d_s = divmod(int(disc["total_duration_s"]), 60)
+                        disc_total_s = sum(float(t[2].get("duration", 0)) for t in disc_tasks)
+                        d_m, d_s = divmod(int(disc_total_s), 60)
+                        disc_total_bytes = sum(t[4].stat().st_size for t in disc_tasks if t[4].exists())
+                        disc_total_mb = disc_total_bytes / (1024 * 1024)
+
                         tracklist_lines = [
                             f"==================================================",
                             f"  Red Spindle - Disc {disc_num} ({disc_type_tag})",
-                            f"  Total Tracks  : {len(disc['tracks'])}",
+                            f"  Total Tracks  : {len(disc_tasks)} / {len(disc['tracks'])}",
                             f"  Total Duration: {d_m}:{d_s:02d}",
-                            f"  Total Size    : {disc['total_mb']:.1f} MB",
+                            f"  Total Size    : {disc_total_mb:.1f} MB",
                             f"  Disc Format   : {disc_type_tag}",
                             f"==================================================\n",
                         ]
 
-                        for t_idx, track in enumerate(disc["tracks"], 1):
-                            src_p = Path(track["path"])
-                            clean_stem = re.sub(r"^\d+\s*[-_.]\s*", "", src_p.stem)
-                            dest_filename = f"{t_idx:02d} - {clean_stem}{src_p.suffix.lower()}"
-                            m3u_lines.append(f"#EXTINF:{int(track['duration'])},{track['artist']} - {track['title']}\n{dest_filename}\n")
-                            dur_m, dur_s = divmod(int(track["duration"]), 60)
-                            tracklist_lines.append(f"{t_idx:02d}. {track['artist']} - {track['title']} ({dur_m}:{dur_s:02d})")
+                        for export_idx, (d_num, orig_idx, track, src_p, dest_p, dest_filename) in enumerate(disc_tasks, 1):
+                            dur_int = int(track.get("duration", 0))
+                            m3u_lines.append(f"#EXTINF:{dur_int},{track['artist']} - {track['title']}\n{dest_filename}\n")
+                            dur_m, dur_s = divmod(dur_int, 60)
+                            tracklist_lines.append(f"{export_idx:02d}. {track['artist']} - {track['title']} ({dur_m}:{dur_s:02d})")
 
                         (disc_folder / "playlist.m3u").write_text("".join(m3u_lines), encoding="utf-8")
                         (disc_folder / "disc_tracklist.txt").write_text("\n".join(tracklist_lines), encoding="utf-8")
@@ -1741,40 +1800,36 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                     # Write master manifest in root
                     manifest = {
                         "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "total_tracks": total_songs,
+                        "total_requested": total_songs,
+                        "total_exported": len(successful_tasks),
+                        "total_failed": len(failed_tasks),
                         "target_bitrate": bitrate,
-                        "disc_size_mb": disc["capacity_mb"],
+                        "disc_type": "audio_cd" if is_audio_cd else "data_cd",
                         "discs": [
                             {
                                 "disc_number": d["disc_number"],
-                                "songs": len(d["tracks"]),
-                                "total_mb": round(d["total_mb"], 1),
+                                "requested_songs": len(d["tracks"]),
+                                "exported_songs": len(success_by_disc.get(d["disc_number"], [])),
+                                "total_mb": round(
+                                    sum(t[4].stat().st_size for t in success_by_disc.get(d["disc_number"], []) if t[4].exists()) / (1024 * 1024),
+                                    1
+                                ),
                             }
                             for d in discs
                         ]
                     }
                     (out_dir / "cd_burn_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
 
-                progress_queue.put(("DONE", None, None))
+                    export_summary = {
+                        "total": total_songs,
+                        "succeeded": len(successful_tasks),
+                        "failed": len(failed_tasks),
+                        "failed_tasks": [(t[3].name, err) for t, err in failed_tasks],
+                    }
+                    progress_queue.put(("DONE", export_summary, None))
 
             except Exception as e:
                 progress_queue.put(("ERROR", str(e), None))
-
-                def _on_finish():
-                    p_win.destroy()
-                    self._is_exporting = False
-                    if not self._cancel_export:
-                        messagebox.showinfo(
-                            "Discs Ready to Burn!",
-                            f"Successfully created {len(discs)} Disc folders in:\n{out_dir}\n\n"
-                            f"Each folder contains a playlist.m3u and tracklist.txt and fits cleanly onto 700 MB CD-Rs!"
-                        )
-                        self._open_output_folder()
-
-                p_win.after(0, _on_finish)
-
-            except Exception as e:
-                p_win.after(0, lambda err=str(e): (p_win.destroy(), messagebox.showerror("Export Error", f"Failed to export discs: {err}")))
 
         threading.Thread(target=_worker, daemon=True).start()
 

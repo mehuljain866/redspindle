@@ -33,6 +33,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added dedicated disc targets in CD Burn Prep for **80-minute** and **74-minute** Red Book Audio CDs alongside 700 MB Data / MP3 CDs.
   - Audio CD mode packs tracks by duration (up to 78 minutes safe limit, ~18–20 tracks), while Data CD mode packs by byte size (up to 690 MB, ~120–180 tracks).
   - UI export prompts, manifests, tracklists, and documentation explicitly explain the technical differences and player requirements for burning Data vs. Audio CDs.
+- **CD Exporter Reliability & Disc Folder Sanitization**:
+  - Validates transfer and transcode task results before compiling playlists and manifests, preventing failed exports from being reported as successful.
+  - Generates `.m3u` playlists and tracklists using only successfully written files, omitting failed tracks and surfacing a detailed warning report if errors occur.
+  - Eliminated silent fallback to oversized raw audio when transcoding fails, preventing disc folders from overflowing the 700 MB capacity limit.
+  - Automatically purges stale audio and playlist files from target `Disc 1`, `Disc 2`, etc. folders before exporting, preventing debris from earlier exports from contaminating subsequent burns.
+  - Cleaned vestigial exception handler in export worker that previously masked export errors.
+- **Robust FFmpeg Discovery & Verification (`ffmpeg_support.py`)**:
+  - Implemented centralized FFmpeg locator supporting `REDSPINDLE_FFMPEG` environment variable override, system PATH, standard Windows install directories (WinGet/Program Files), and bundled wheel fallbacks.
+  - Verifies binary operability (`-version`) and MP3 encoder support (`libmp3lame`) during preflight checks.
+  - Explicitly passes `ffmpeg_location` to yt-dlp download options so audio extraction never fails when FFmpeg is in custom or bundled locations.
 
 ### Changed
 - **Neutralized Split Album Dialog Copy**:

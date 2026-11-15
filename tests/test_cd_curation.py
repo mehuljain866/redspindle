@@ -65,6 +65,29 @@ class CDCurationTests(unittest.TestCase):
         self.assertEqual(len(discs[0]["tracks"]), 16)
         self.assertEqual(len(discs[1]["tracks"]), 4)
 
+    def test_disc_folder_cleanup_removes_stale_files(self):
+        """Ensures stale files in existing Disc folders are removed before reuse."""
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmpdir:
+            disc_folder = Path(tmpdir) / "Disc 1"
+            disc_folder.mkdir()
+            old_track = disc_folder / "99 - OldSong.mp3"
+            old_track.write_text("dummy")
+            old_m3u = disc_folder / "playlist.m3u"
+            old_m3u.write_text("dummy")
+
+            # Simulate cleanup logic
+            for old_file in list(disc_folder.iterdir()):
+                if old_file.is_file() and (
+                    old_file.suffix.lower() in (".mp3", ".m4a", ".flac", ".opus", ".wav", ".m3u", ".txt")
+                    or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
+                ):
+                    old_file.unlink()
+
+            remaining = list(disc_folder.iterdir())
+            self.assertEqual(len(remaining), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

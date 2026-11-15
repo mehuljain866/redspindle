@@ -29,6 +29,7 @@ import time
 import unicodedata
 
 from track_matching import rank_youtube_candidates
+from ffmpeg_support import get_ffmpeg_executable
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -1012,8 +1013,15 @@ def download_track_audio(
                 f"({selected['score']:.0%}; {version_label})"
             )
 
+        ffmpeg_exe = get_ffmpeg_executable(required_encoder="libmp3lame" if fmt.lower() == "mp3" else None)
+        if not ffmpeg_exe:
+            if verbose:
+                safe_print(f"    {red('FFmpeg was not found. Install FFmpeg or set REDSPINDLE_FFMPEG.')}")
+            return False
+
         download_opts = {
             "format": "bestaudio/best",
+            "ffmpeg_location": ffmpeg_exe,
             "outtmpl": temp_tmpl,
             "quiet": not verbose,
             "no_warnings": not verbose,
@@ -1247,34 +1255,6 @@ def embed_id3_metadata(
 # ──────────────────────────────────────────────────────────────────────────────
 # Audio Transcoding & Downsizing (Quality Adjustment)
 # ──────────────────────────────────────────────────────────────────────────────
-
-def get_ffmpeg_executable() -> Optional[str]:
-    """Find ffmpeg in PATH or common Windows / WinGet install locations."""
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-
-    if sys.platform == "win32":
-        local_app = os.environ.get("LOCALAPPDATA", "")
-        if local_app:
-            winget_pkgs = Path(local_app) / "Microsoft" / "WinGet" / "Packages"
-            if winget_pkgs.exists():
-                try:
-                    for f in winget_pkgs.glob("**/ffmpeg.exe"):
-                        return str(f)
-                except Exception:
-                    pass
-            for f in (Path(local_app) / "Programs").glob("**/ffmpeg.exe"):
-                return str(f)
-        prog_files = Path(os.environ.get("ProgramFiles", "C:\\Program Files"))
-        if prog_files.exists():
-            try:
-                for f in prog_files.glob("**/ffmpeg.exe"):
-                    return str(f)
-            except Exception:
-                pass
-    return None
-
 
 def transcode_audio_file(
     src_file: Path,
