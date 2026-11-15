@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.2.2] - 2026-11-15
 
 ### Added
+- **Candidate-Ranked Audio Acquisition & Verification**:
+  - Replaced naive `ytsearch1` first-result downloading with multi-candidate search (`ytsearch5`) and weighted similarity scoring (`track_matching.py`).
+  - Evaluates candidate title similarity, artist/channel tokens, and track duration tolerance (max 8–20s difference) before initiating audio download.
+  - Automatically filters out unwanted versions including live recordings, karaoke, covers, instrumental tracks, and unofficial remixes when studio versions are requested.
+  - Verifies explicit vs. clean status: in clean mode, explicit tracks require an explicit clean/radio edit label in the YouTube metadata or are rejected, preventing accidental download of uncensored audio.
+  - Restricts content advisory metadata (`TXXX:ITUNESADVISORY`, `rtng`, `itunesadvisory`) so advisory tags are only written when audio version status is verified.
+- **Automated Test Suite for Audio Matching**:
+  - Added unit test suite in `tests/test_track_matching.py` with 9 automated tests covering exact matching, version filtering, candidate ranking, duration limits, and clean-mode verification.
 - **Multi-Factor Album Clustering & Collision Protection**:
   - Re-architected `fix_library_album_tags` to group tracks by directory path, album title, release identity, and artist family.
   - Distinct albums sharing identical titles (such as Queen's *Greatest Hits* versus ABBA's *Greatest Hits*) in nested or flat directories are isolated into independent clusters and protected from metadata cross-contamination.

@@ -21,7 +21,7 @@ jobs:
             artifact_name: RedSpindle-Windows.exe
             build_cmd: |
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --windowed --name "RedSpindle-Windows" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico;." gui.py
+              pyinstaller --onefile --windowed --name "RedSpindle-Windows" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --hidden-import track_matching --add-data "icon.ico;." gui.py
               copy dist\RedSpindle-Windows.exe dist\Spotify-Downloader-Windows.exe
             output_path: dist/*Windows.exe
 
@@ -30,7 +30,7 @@ jobs:
             build_cmd: |
               sudo apt-get update && sudo apt-get install -y ffmpeg python3-tk libgl1 libglib2.0-0
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --name "RedSpindle-Linux" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico:." gui.py
+              pyinstaller --onefile --name "RedSpindle-Linux" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --hidden-import track_matching --add-data "icon.ico:." gui.py
               cp dist/RedSpindle-Linux dist/Spotify-Downloader-Linux
             output_path: dist/*Linux*
 
@@ -39,7 +39,7 @@ jobs:
             build_cmd: |
               brew install ffmpeg python-tk@3.12 || true
               pip install -r requirements.txt pyinstaller
-              pyinstaller --onefile --windowed --name "RedSpindle-macOS" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --add-data "icon.ico:." gui.py
+              pyinstaller --onefile --windowed --name "RedSpindle-macOS" --icon "icon.ico" --collect-all customtkinter --collect-all spotapi --collect-all pygame --collect-all cv2 --hidden-import cd_prep --hidden-import cd_art --hidden-import track_matching --add-data "icon.ico:." gui.py
               cd dist && zip -r RedSpindle-macOS.zip RedSpindle-macOS.app RedSpindle-macOS 2>/dev/null || zip -r RedSpindle-macOS.zip *
               cp RedSpindle-macOS.zip Spotify-Downloader-macOS.zip
             output_path: dist/*macOS.zip
@@ -52,6 +52,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Run track-matching unit tests
+        run: python -m unittest discover -s tests -v
 
       - name: Build Standalone Executable
         run: ${{ matrix.build_cmd }}

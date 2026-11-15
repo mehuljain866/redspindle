@@ -27,6 +27,8 @@ import subprocess
 import threading
 import time
 import unicodedata
+
+from track_matching import rank_youtube_candidates
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -918,25 +920,19 @@ def fetch_track_lyrics(
 
 
 def build_search_query(track: dict, explicit_mode: str = "explicit") -> str:
-    """Build a search query for yt-dlp to find the best audio stream."""
+    """Build a focused YouTube search query from Spotify track metadata."""
     artist = track.get("artist", "")
     title = track.get("title", "")
     clean_title = re.sub(r"[\(\[](clean|radio\s*edit|explicit)[\)\]]", "", title, flags=re.IGNORECASE).strip()
     if not clean_title:
         clean_title = title
     is_exp = track.get("is_explicit", False)
-    clean_mode = (explicit_mode.lower() == "clean")
 
-    if clean_mode:
-        if is_exp:
-            return f"{artist} - {clean_title} clean audio"
-        else:
-            return f"{artist} - {clean_title} audio"
-    else:
-        if is_exp:
-            return f"{artist} - {clean_title} explicit audio"
-        else:
-            return f"{artist} - {clean_title} audio"
+    if explicit_mode.lower() == "clean" and is_exp:
+        return f"{artist} - {clean_title} clean version radio edit"
+    if is_exp:
+        return f"{artist} - {clean_title} explicit audio"
+    return f"{artist} - {clean_title} audio"
 
 
 def download_track_audio(
@@ -948,38 +944,99 @@ def download_track_audio(
     explicit_mode: str = "explicit",
 ) -> bool:
     """
-    Downloads audio using yt-dlp with FFmpeg audio conversion.
+    Find, score and download the best matching YouTube result.
+
+    Search metadata is evaluated before any audio is downloaded. A candidate
+    must pass title, artist, duration and version checks; uncertain clean
+    versions are rejected rather than silently replaced with explicit audio.
     """
     query = build_search_query(track, explicit_mode=explicit_mode)
     temp_tmpl = str(output_path.with_suffix(".%(ext)s"))
 
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": temp_tmpl,
-        "quiet": not verbose,
-        "no_warnings": not verbose,
-        "default_search": "ytsearch1",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": fmt,
-                "preferredquality": bitrate.replace("k", ""),
-            }
-        ],
-        "noplaylist": True,
-        "retries": 3,
-        "fragment_retries": 3,
-        "sleep_interval": 1,
-        "max_sleep_interval": 3,
-    }
-
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([query])
+        search_opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "extract_flat": False,
+            "socket_timeout": 30,
+            "retries": 2,
+            "ignoreerrors": True,
+        }
+        with yt_dlp.YoutubeDL(search_opts) as ydl:
+            search_info = ydl.extract_info(f"ytsearch5:{query}", download=False)
+
+        entries = list((search_info or {}).get("entries") or [])
+        ranked = rank_youtube_candidates(track, entries, explicit_mode=explicit_mode)
+        selected = next((item for item in ranked if item["accepted"]), None)
+
+        if selected is None:
+            if verbose:
+                safe_print(f"    {yellow('No reliable YouTube match found:')} {query}")
+                for item in ranked[:3]:
+                    candidate_title = item["candidate"].get("title", "(untitled)")
+                    safe_print(f"      - {candidate_title}: {item['reason']}")
+            return False
+
+        candidate = selected["candidate"]
+        candidate_url = (
+            candidate.get("webpage_url")
+            or candidate.get("original_url")
+            or (candidate.get("url") if str(candidate.get("url", "")).startswith("http") else None)
+        )
+        if not candidate_url and candidate.get("id"):
+            candidate_url = f"https://www.youtube.com/watch?v={candidate['id']}"
+        if not candidate_url:
+            if verbose:
+                safe_print(f"    {yellow('Matched result has no usable video URL.')}")
+            return False
+
+        track["_youtube_match"] = {
+            "title": candidate.get("title", ""),
+            "uploader": candidate.get("channel") or candidate.get("uploader") or "",
+            "url": candidate_url,
+            "score": selected["score"],
+            "version_status": selected["version_status"],
+            "version_verified": selected["version_verified"],
+            "duration_delta": selected["duration_delta"],
+        }
+
+        if verbose:
+            version_label = (
+                selected["version_status"]
+                if selected["version_verified"] else "version unverified"
+            )
+            safe_print(
+                f"    {green('Matched:')} {candidate.get('title', '')} "
+                f"({selected['score']:.0%}; {version_label})"
+            )
+
+        download_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": temp_tmpl,
+            "quiet": not verbose,
+            "no_warnings": not verbose,
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": fmt,
+                    "preferredquality": bitrate.replace("k", ""),
+                }
+            ],
+            "noplaylist": True,
+            "retries": 3,
+            "fragment_retries": 3,
+            "sleep_interval": 1,
+            "max_sleep_interval": 3,
+        }
+        with yt_dlp.YoutubeDL(download_opts) as ydl:
+            ydl.download([candidate_url])
+
         return output_path.exists() and output_path.stat().st_size > 50000
     except Exception as e:
         if verbose:
-            print(f"    {red('yt-dlp error:')} {e}")
+            safe_print(f"    {red('yt-dlp error:')} {e}")
         return False
 
 
@@ -1040,7 +1097,18 @@ def embed_id3_metadata(
 
     is_exp = bool(track.get("is_explicit") or has_explicit_content(lyrics_text or ""))
     clean_mode = (explicit_mode.lower() == "clean")
-    advisory_rating = 2 if (clean_mode and is_exp) else (1 if is_exp else 0)
+    match_info = track.get("_youtube_match")
+    if isinstance(match_info, dict):
+        # Do not write clean/explicit advisory data unless the selected result
+        # carried a corresponding version label. Spotify's flag alone cannot
+        # prove which version a third-party search result contains.
+        advisory_rating = (
+            {"clean": 2, "explicit": 1}.get(match_info.get("version_status"))
+            if match_info.get("version_verified") else None
+        )
+    else:
+        # Preserve the previous behaviour for existing-library tag updates.
+        advisory_rating = 2 if (clean_mode and is_exp) else (1 if is_exp else 0)
 
     try:
         if ext == ".mp3":
@@ -1075,7 +1143,8 @@ def embed_id3_metadata(
 
             try:
                 tags.delall("TXXX:ITUNESADVISORY")
-                tags.add(TXXX(encoding=3, desc="ITUNESADVISORY", text=[str(advisory_rating)]))
+                if advisory_rating is not None:
+                    tags.add(TXXX(encoding=3, desc="ITUNESADVISORY", text=[str(advisory_rating)]))
             except Exception:
                 pass
 
@@ -1105,7 +1174,10 @@ def embed_id3_metadata(
                 audio["compilation"] = "1"
             if lyrics_text:
                 audio["lyrics"] = lyrics_text
-            audio["itunesadvisory"] = [str(advisory_rating)]
+            if advisory_rating is not None:
+                audio["itunesadvisory"] = [str(advisory_rating)]
+            elif "itunesadvisory" in audio:
+                del audio["itunesadvisory"]
             audio["tracknumber"] = str(track_num)
             audio["discnumber"] = str(disc_num)
             if release:
@@ -1131,7 +1203,10 @@ def embed_id3_metadata(
                 audio["cpil"] = True
             if lyrics_text:
                 audio["\xa9lyr"] = [lyrics_text]
-            audio["rtng"] = [advisory_rating]
+            if advisory_rating is not None:
+                audio["rtng"] = [advisory_rating]
+            elif "rtng" in audio:
+                del audio["rtng"]
             try:
                 audio["trkn"] = [(int(track_num), 0)]
             except Exception:
@@ -2417,6 +2492,19 @@ def run_download(
                 _notify(f"Failed [{curr_done}/{new_count}]: {track_label}", curr_done / max(1, new_count), track_label)
             safe_print(f"  [{item_idx:>3}/{new_count}] {red('FAILED')}: {title} - {artist}")
             return False
+
+        match_info = track.get("_youtube_match") or {}
+        if match_info:
+            version_label = (
+                match_info.get("version_status")
+                if match_info.get("version_verified") else "version unverified"
+            )
+            _notify(
+                f"Matched YouTube: {match_info.get('title', 'selected result')} "
+                f"({match_info.get('score', 0):.0%}; {version_label})",
+                (downloaded_count + failed_count) / max(1, new_count),
+                track_label,
+            )
 
         # Fetch cover art
         cover_bytes = download_image_bytes(track.get("cover_url"))
