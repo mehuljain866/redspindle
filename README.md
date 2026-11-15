@@ -5,6 +5,8 @@
 </p>
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat" alt="MIT License" /></a>
+  <a href="https://github.com/mehuljain866/redspindle/actions/workflows/tests.yml"><img src="https://github.com/mehuljain866/redspindle/actions/workflows/tests.yml/badge.svg" alt="Test Suite" /></a>
   <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Metadata-Universal%20ID3v2-007ACC?style=flat" alt="Universal ID3v2" /></a>
   <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Split--Album%20Fix-Universal%20TPE2-FA2D48?style=flat" alt="Split-Album Fix" /></a>
   <a href="#library-tagging-and-player-compatibility"><img src="https://img.shields.io/badge/Lyrics-.lrc%20%2B%20Embedded-2E7D32?style=flat" alt="Lyrics .lrc + Embedded" /></a>
@@ -395,3 +397,9 @@ Once your songs are curated or burned, generate high-resolution printable circul
 ## Changelog
 
 For the complete release history and update notes, see [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## License
+
+This project is licensed under the terms of the [MIT License](LICENSE).
