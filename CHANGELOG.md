@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI Parser Regression Testing**:
   - `tests/test_cli.py` now tests real `spotify_dl.py` argument dispatch and flag validation rather than a duplicate mock parser.
 
+### Fixed
+- **Audio CD Export Completion**:
+  - Refactored disc exporting into `export_cd_discs` and decoupled playlist/manifest generation and terminal queue signaling from the Data CD capacity check. Audio CD exports now complete cleanly and notify the user interface.
+
 ---
 
 ## [2.2.2] - 2026-11-15

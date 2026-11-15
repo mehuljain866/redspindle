@@ -15,8 +15,9 @@ import shutil
 import ctypes
 import threading
 from pathlib import Path
-from typing import Optional, List, Dict, Tuple, Callable
-from collections import deque
+from typing import Optional, List, Dict, Tuple, Callable, Any
+from collections import deque, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
 
 from PIL import Image, ImageTk, ImageDraw
@@ -515,6 +516,231 @@ def cleanup_stale_disc_folders(output_folder: Path, active_disc_numbers: set[int
             # Preserve user-created files/subfolders; generated tracks are still removed.
             pass
     return removed_folders
+
+
+def export_cd_discs(
+    discs: List[Dict],
+    out_dir: Path,
+    bitrate: str = "original",
+    is_audio_cd: bool = False,
+    max_mins: float = 80.0,
+    progress_queue: Optional[Any] = None,
+    cancel_check: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
+    """
+    Exports curated tracks into disc folders (Disc 1, Disc 2, etc.),
+    optionally transcoding audio, checking capacity limits on Data CDs,
+    and writing playlist.m3u, disc_tracklist.txt, and cd_burn_manifest.json.
+    Reports progress and terminal state through progress_queue if provided.
+    """
+    out_dir = Path(out_dir)
+    total_songs = sum(len(d["tracks"]) for d in discs)
+    processed_count = 0
+    successful_tasks = []
+    failed_tasks = []
+
+    def _cancelled() -> bool:
+        return cancel_check() if cancel_check else False
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Pre-assemble tasks, remove obsolete generated disc folders, and
+    # invalidate any manifest from a previous export before doing work.
+    tasks = []
+    cleanup_stale_disc_folders(out_dir, {d["disc_number"] for d in discs})
+    old_manifest = out_dir / "cd_burn_manifest.json"
+    if old_manifest.exists():
+        old_manifest.unlink()
+    for disc in discs:
+        disc_num = disc["disc_number"]
+        disc_folder = out_dir / f"Disc {disc_num}"
+        if disc_folder.exists():
+            for old_file in list(disc_folder.iterdir()):
+                generated_track = re.fullmatch(
+                    r"\d+\s+-\s+.+\.(?:mp3|m4a|flac|opus|ogg|wav)",
+                    old_file.name,
+                    flags=re.IGNORECASE,
+                )
+                if old_file.is_file() and (
+                    generated_track or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
+                ):
+                    try:
+                        old_file.unlink()
+                    except OSError:
+                        pass
+        else:
+            disc_folder.mkdir(parents=True, exist_ok=True)
+
+        for t_idx, track in enumerate(disc["tracks"], 1):
+            src_p = Path(track["path"])
+            clean_stem = re.sub(r"^\d+\s*[-_.]\s*", "", src_p.stem)
+            dest_filename = f"{t_idx:02d} - {clean_stem}{src_p.suffix.lower()}"
+            dest_p = disc_folder / dest_filename
+            tasks.append((disc_num, t_idx, track, src_p, dest_p, dest_filename))
+
+    def _execute_task(task):
+        if _cancelled():
+            return task, False, "Export cancelled"
+        disc_num, t_idx, track, src_p, dest_p, dest_filename = task
+        try:
+            if bitrate.lower() in ("original", "keep as-is", "none") or not transcode_audio_file:
+                shutil.copy2(src_p, dest_p)
+                return task, True, None
+            else:
+                ok = transcode_audio_file(src_p, dest_p, target_bitrate=bitrate)
+                if not ok or not dest_p.exists() or dest_p.stat().st_size == 0:
+                    if dest_p.exists():
+                        try:
+                            dest_p.unlink()
+                        except OSError:
+                            pass
+                    return task, False, f"Transcoding failed for {src_p.name}"
+                return task, True, None
+        except Exception as e:
+            if dest_p.exists():
+                try:
+                    dest_p.unlink()
+                except OSError:
+                    pass
+            return task, False, str(e)
+
+    # Run parallel transfers with worker pool
+    max_workers = min(8, max(2, (os.cpu_count() or 4)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(_execute_task, t) for t in tasks]
+        for fut in as_completed(futures):
+            if _cancelled():
+                break
+            task, ok, err_msg = fut.result()
+            processed_count += 1
+            pct = processed_count / max(1, total_songs)
+            disc_num, t_idx, track, src_p, dest_p, dest_filename = task
+            if ok:
+                successful_tasks.append(task)
+            else:
+                failed_tasks.append((task, err_msg))
+            msg = f"Exporting [{processed_count}/{total_songs}]: {track.get('title', src_p.stem)} - {track.get('artist', 'Unknown')}"
+            if progress_queue:
+                progress_queue.put(("PROGRESS", msg, pct))
+
+    if _cancelled():
+        for task in tasks:
+            dest_path = task[4]
+            if dest_path.exists():
+                try:
+                    dest_path.unlink()
+                except OSError:
+                    pass
+        if progress_queue:
+            progress_queue.put(("CANCELLED", None, None))
+        return {
+            "total": total_songs,
+            "succeeded": 0,
+            "failed": total_songs,
+            "cancelled": True,
+            "failed_tasks": [],
+        }
+
+    success_by_disc = defaultdict(list)
+    for task in successful_tasks:
+        success_by_disc[task[0]].append(task)
+    for disc_num in success_by_disc:
+        success_by_disc[disc_num].sort(key=lambda t: t[1])
+
+    # Verify actual post-transcode sizes, not just estimates, before
+    # writing playlists/manifest that imply a Data CD is burn-ready.
+    if not is_audio_cd:
+        capacity_errors = []
+        for disc in discs:
+            disc_folder = out_dir / f"Disc {disc['disc_number']}"
+            # Include pre-existing user files preserved in the destination folder.
+            actual_bytes = sum(
+                path.stat().st_size for path in disc_folder.rglob("*") if path.is_file()
+            )
+            safe_bytes = int(max(50.0, disc["capacity_mb"] - 10.0) * 1024 * 1024)
+            if actual_bytes > safe_bytes:
+                capacity_errors.append(
+                    f"Disc {disc['disc_number']}: {actual_bytes / (1024 * 1024):.1f} MB "
+                    f"exceeds the {safe_bytes / (1024 * 1024):.1f} MB safe limit"
+                )
+        if capacity_errors:
+            for task in successful_tasks:
+                if task[4].exists():
+                    try:
+                        task[4].unlink()
+                    except OSError:
+                        pass
+            raise RuntimeError(
+                "Post-transcode capacity check failed. No burn-ready playlists were written.\n"
+                + "\n".join(capacity_errors)
+                + "\nChoose a lower bitrate or reduce the selection, then export again."
+            )
+
+    # Write playlists and tracklists using only successfully exported tracks
+    for disc in discs:
+        disc_num = disc["disc_number"]
+        disc_folder = out_dir / f"Disc {disc_num}"
+        disc_tasks = success_by_disc.get(disc_num, [])
+
+        m3u_lines = ["#EXTM3U\n"]
+        disc_type_tag = f"Audio CD (CD-DA, {max_mins:.0f}-Min)" if is_audio_cd else f"Data / MP3 CD ({disc['capacity_mb']:.0f} MB)"
+        disc_total_s = sum(float(t[2].get("duration", 0)) for t in disc_tasks)
+        d_m, d_s = divmod(int(disc_total_s), 60)
+        disc_total_bytes = sum(t[4].stat().st_size for t in disc_tasks if t[4].exists())
+        disc_total_mb = disc_total_bytes / (1024 * 1024)
+
+        tracklist_lines = [
+            f"==================================================",
+            f"  Red Spindle - Disc {disc_num} ({disc_type_tag})",
+            f"  Total Tracks  : {len(disc_tasks)} / {len(disc['tracks'])}",
+            f"  Total Duration: {d_m}:{d_s:02d}",
+            f"  Total Size    : {disc_total_mb:.1f} MB",
+            f"  Disc Format   : {disc_type_tag}",
+            f"==================================================\n",
+        ]
+
+        for export_idx, (d_num, orig_idx, track, src_p, dest_p, dest_filename) in enumerate(disc_tasks, 1):
+            dur_int = int(track.get("duration", 0))
+            m3u_lines.append(f"#EXTINF:{dur_int},{track.get('artist', 'Unknown')} - {track.get('title', 'Unknown')}\n{dest_filename}\n")
+            dur_m, dur_s = divmod(dur_int, 60)
+            tracklist_lines.append(f"{export_idx:02d}. {track.get('artist', 'Unknown')} - {track.get('title', 'Unknown')} ({dur_m}:{dur_s:02d})")
+
+        (disc_folder / "playlist.m3u").write_text("".join(m3u_lines), encoding="utf-8")
+        (disc_folder / "disc_tracklist.txt").write_text("\n".join(tracklist_lines), encoding="utf-8")
+
+    # Write master manifest in root
+    manifest = {
+        "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "total_requested": total_songs,
+        "total_exported": len(successful_tasks),
+        "total_failed": len(failed_tasks),
+        "target_bitrate": bitrate,
+        "disc_type": "audio_cd" if is_audio_cd else "data_cd",
+        "discs": [
+            {
+                "disc_number": d["disc_number"],
+                "requested_songs": len(d["tracks"]),
+                "exported_songs": len(success_by_disc.get(d["disc_number"], [])),
+                "total_mb": round(
+                    sum(t[4].stat().st_size for t in success_by_disc.get(d["disc_number"], []) if t[4].exists()) / (1024 * 1024),
+                    1
+                ),
+            }
+            for d in discs
+        ]
+    }
+    (out_dir / "cd_burn_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+
+    export_summary = {
+        "total": total_songs,
+        "succeeded": len(successful_tasks),
+        "failed": len(failed_tasks),
+        "failed_tasks": [(t[3].name, err) for t, err in failed_tasks],
+    }
+    if progress_queue:
+        progress_queue.put(("DONE", export_summary, None))
+
+    return export_summary
 
 
 def generate_fallback_album_art(size: Tuple[int, int] = (240, 240)) -> Image.Image:
@@ -1730,206 +1956,16 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         p_win.after(40, _check_progress)
 
         def _worker():
-            from concurrent.futures import ThreadPoolExecutor, as_completed
-            from collections import defaultdict
-            total_songs = sum(len(d["tracks"]) for d in discs)
-            processed_count = 0
-            successful_tasks = []
-            failed_tasks = []
-
             try:
-                out_dir.mkdir(parents=True, exist_ok=True)
-
-                # Pre-assemble tasks, remove obsolete generated disc folders, and
-                # invalidate any manifest from a previous export before doing work.
-                tasks = []
-                cleanup_stale_disc_folders(out_dir, {d["disc_number"] for d in discs})
-                old_manifest = out_dir / "cd_burn_manifest.json"
-                if old_manifest.exists():
-                    old_manifest.unlink()
-                for disc in discs:
-                    disc_num = disc["disc_number"]
-                    disc_folder = out_dir / f"Disc {disc_num}"
-                    if disc_folder.exists():
-                        for old_file in list(disc_folder.iterdir()):
-                            generated_track = re.fullmatch(
-                                r"\d+\s+-\s+.+\.(?:mp3|m4a|flac|opus|ogg|wav)",
-                                old_file.name,
-                                flags=re.IGNORECASE,
-                            )
-                            if old_file.is_file() and (
-                                generated_track or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
-                            ):
-                                try:
-                                    old_file.unlink()
-                                except OSError:
-                                    pass
-                    else:
-                        disc_folder.mkdir(parents=True, exist_ok=True)
-
-                    for t_idx, track in enumerate(disc["tracks"], 1):
-                        src_p = Path(track["path"])
-                        clean_stem = re.sub(r"^\d+\s*[-_.]\s*", "", src_p.stem)
-                        dest_filename = f"{t_idx:02d} - {clean_stem}{src_p.suffix.lower()}"
-                        dest_p = disc_folder / dest_filename
-                        tasks.append((disc_num, t_idx, track, src_p, dest_p, dest_filename))
-
-                def _execute_task(task):
-                    if self._cancel_export:
-                        return task, False, "Export cancelled"
-                    disc_num, t_idx, track, src_p, dest_p, dest_filename = task
-                    try:
-                        if bitrate.lower() in ("original", "keep as-is", "none") or not transcode_audio_file:
-                            shutil.copy2(src_p, dest_p)
-                            return task, True, None
-                        else:
-                            ok = transcode_audio_file(src_p, dest_p, target_bitrate=bitrate)
-                            if not ok or not dest_p.exists() or dest_p.stat().st_size == 0:
-                                if dest_p.exists():
-                                    try:
-                                        dest_p.unlink()
-                                    except OSError:
-                                        pass
-                                return task, False, f"Transcoding failed for {src_p.name}"
-                            return task, True, None
-                    except Exception as e:
-                        if dest_p.exists():
-                            try:
-                                dest_p.unlink()
-                            except OSError:
-                                pass
-                        return task, False, str(e)
-
-                # Run parallel transfers with worker pool
-                max_workers = min(8, max(2, (os.cpu_count() or 4)))
-                with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                    futures = [executor.submit(_execute_task, t) for t in tasks]
-                    for fut in as_completed(futures):
-                        if self._cancel_export:
-                            break
-                        task, ok, err_msg = fut.result()
-                        processed_count += 1
-                        pct = processed_count / max(1, total_songs)
-                        disc_num, t_idx, track, src_p, dest_p, dest_filename = task
-                        if ok:
-                            successful_tasks.append(task)
-                        else:
-                            failed_tasks.append((task, err_msg))
-                        msg = f"Exporting [{processed_count}/{total_songs}]: {track['title']} - {track['artist']}"
-                        progress_queue.put(("PROGRESS", msg, pct))
-
-                if self._cancel_export:
-                    # The executor has now joined its workers. Remove every partial
-                    # file created by this run, including tasks that completed just
-                    # before cancellation but were not consumed from the futures queue.
-                    for task in tasks:
-                        dest_path = task[4]
-                        if dest_path.exists():
-                            try:
-                                dest_path.unlink()
-                            except OSError:
-                                pass
-                    progress_queue.put(("CANCELLED", None, None))
-                    return
-
-                success_by_disc = defaultdict(list)
-                for task in successful_tasks:
-                    success_by_disc[task[0]].append(task)
-                for disc_num in success_by_disc:
-                    success_by_disc[disc_num].sort(key=lambda t: t[1])
-
-                # Verify actual post-transcode sizes, not just estimates, before
-                # writing playlists/manifest that imply a Data CD is burn-ready.
-                if not is_audio_cd:
-                    capacity_errors = []
-                    for disc in discs:
-                        disc_folder = out_dir / f"Disc {disc['disc_number']}"
-                        # Include pre-existing user files preserved in the destination folder.
-                        actual_bytes = sum(
-                            path.stat().st_size for path in disc_folder.rglob("*") if path.is_file()
-                        )
-                        safe_bytes = int(max(50.0, disc["capacity_mb"] - 10.0) * 1024 * 1024)
-                        if actual_bytes > safe_bytes:
-                            capacity_errors.append(
-                                f"Disc {disc['disc_number']}: {actual_bytes / (1024 * 1024):.1f} MB "
-                                f"exceeds the {safe_bytes / (1024 * 1024):.1f} MB safe limit"
-                            )
-                    if capacity_errors:
-                        for task in successful_tasks:
-                            if task[4].exists():
-                                try:
-                                    task[4].unlink()
-                                except OSError:
-                                    pass
-                        raise RuntimeError(
-                            "Post-transcode capacity check failed. No burn-ready playlists were written.\n"
-                            + "\n".join(capacity_errors)
-                            + "\nChoose a lower bitrate or reduce the selection, then export again."
-                        )
-
-                # Write playlists and tracklists using only successfully exported tracks
-                    for disc in discs:
-                        disc_num = disc["disc_number"]
-                        disc_folder = out_dir / f"Disc {disc_num}"
-                        disc_tasks = success_by_disc.get(disc_num, [])
-
-                        m3u_lines = ["#EXTM3U\n"]
-                        disc_type_tag = f"Audio CD (CD-DA, {max_mins:.0f}-Min)" if is_audio_cd else f"Data / MP3 CD ({disc['capacity_mb']:.0f} MB)"
-                        disc_total_s = sum(float(t[2].get("duration", 0)) for t in disc_tasks)
-                        d_m, d_s = divmod(int(disc_total_s), 60)
-                        disc_total_bytes = sum(t[4].stat().st_size for t in disc_tasks if t[4].exists())
-                        disc_total_mb = disc_total_bytes / (1024 * 1024)
-
-                        tracklist_lines = [
-                            f"==================================================",
-                            f"  Red Spindle - Disc {disc_num} ({disc_type_tag})",
-                            f"  Total Tracks  : {len(disc_tasks)} / {len(disc['tracks'])}",
-                            f"  Total Duration: {d_m}:{d_s:02d}",
-                            f"  Total Size    : {disc_total_mb:.1f} MB",
-                            f"  Disc Format   : {disc_type_tag}",
-                            f"==================================================\n",
-                        ]
-
-                        for export_idx, (d_num, orig_idx, track, src_p, dest_p, dest_filename) in enumerate(disc_tasks, 1):
-                            dur_int = int(track.get("duration", 0))
-                            m3u_lines.append(f"#EXTINF:{dur_int},{track['artist']} - {track['title']}\n{dest_filename}\n")
-                            dur_m, dur_s = divmod(dur_int, 60)
-                            tracklist_lines.append(f"{export_idx:02d}. {track['artist']} - {track['title']} ({dur_m}:{dur_s:02d})")
-
-                        (disc_folder / "playlist.m3u").write_text("".join(m3u_lines), encoding="utf-8")
-                        (disc_folder / "disc_tracklist.txt").write_text("\n".join(tracklist_lines), encoding="utf-8")
-
-                    # Write master manifest in root
-                    manifest = {
-                        "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "total_requested": total_songs,
-                        "total_exported": len(successful_tasks),
-                        "total_failed": len(failed_tasks),
-                        "target_bitrate": bitrate,
-                        "disc_type": "audio_cd" if is_audio_cd else "data_cd",
-                        "discs": [
-                            {
-                                "disc_number": d["disc_number"],
-                                "requested_songs": len(d["tracks"]),
-                                "exported_songs": len(success_by_disc.get(d["disc_number"], [])),
-                                "total_mb": round(
-                                    sum(t[4].stat().st_size for t in success_by_disc.get(d["disc_number"], []) if t[4].exists()) / (1024 * 1024),
-                                    1
-                                ),
-                            }
-                            for d in discs
-                        ]
-                    }
-                    (out_dir / "cd_burn_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-                    export_summary = {
-                        "total": total_songs,
-                        "succeeded": len(successful_tasks),
-                        "failed": len(failed_tasks),
-                        "failed_tasks": [(t[3].name, err) for t, err in failed_tasks],
-                    }
-                    progress_queue.put(("DONE", export_summary, None))
-
+                export_cd_discs(
+                    discs=discs,
+                    out_dir=out_dir,
+                    bitrate=bitrate,
+                    is_audio_cd=is_audio_cd,
+                    max_mins=max_mins,
+                    progress_queue=progress_queue,
+                    cancel_check=lambda: self._cancel_export,
+                )
             except Exception as e:
                 progress_queue.put(("ERROR", str(e), None))
 

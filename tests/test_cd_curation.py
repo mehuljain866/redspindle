@@ -1,10 +1,13 @@
+import json
+import queue
+import tempfile
 import unittest
 from pathlib import Path
-import tempfile
 from cd_prep import (
     calculate_disc_distribution,
     cleanup_stale_disc_folders,
     estimate_track_size_bytes,
+    export_cd_discs,
 )
 
 
@@ -101,6 +104,133 @@ class CDCurationTests(unittest.TestCase):
             removed = cleanup_stale_disc_folders(output, {1})
             self.assertEqual(removed, ["Disc 4"])
             self.assertFalse(stale.exists())
+
+    def test_audio_cd_export_emits_done_and_writes_manifest(self):
+        """Audio CD exports must not skip playlist generation or the DONE queue event."""
+        with tempfile.TemporaryDirectory() as src_dir, tempfile.TemporaryDirectory() as out_dir:
+            src_path = Path(src_dir)
+            out_path = Path(out_dir)
+
+            t1 = src_path / "song1.mp3"
+            t1.write_bytes(b"dummy audio content 1")
+            t2 = src_path / "song2.mp3"
+            t2.write_bytes(b"dummy audio content 2")
+
+            tracks = [
+                {"path": str(t1), "title": "First Song", "artist": "Artist A", "duration": 180.0, "size": len(t1.read_bytes())},
+                {"path": str(t2), "title": "Second Song", "artist": "Artist B", "duration": 200.0, "size": len(t2.read_bytes())},
+            ]
+            discs = calculate_disc_distribution(tracks, is_audio_cd=True, max_audio_cd_minutes=80.0)
+
+            q = queue.Queue()
+            summary = export_cd_discs(
+                discs=discs,
+                out_dir=out_path,
+                bitrate="original",
+                is_audio_cd=True,
+                max_mins=80.0,
+                progress_queue=q,
+            )
+
+            # Check that DONE event was queued
+            events = []
+            while not q.empty():
+                events.append(q.get_nowait())
+
+            terminal_events = [e for e in events if e[0] in ("DONE", "ERROR", "CANCELLED")]
+            self.assertEqual(len(terminal_events), 1)
+            self.assertEqual(terminal_events[0][0], "DONE")
+            self.assertEqual(summary["succeeded"], 2)
+            self.assertEqual(summary["failed"], 0)
+
+            # Verify files on disk
+            disc1 = out_path / "Disc 1"
+            self.assertTrue(disc1.exists())
+            self.assertTrue((disc1 / "playlist.m3u").exists())
+            self.assertTrue((disc1 / "disc_tracklist.txt").exists())
+            manifest_file = out_path / "cd_burn_manifest.json"
+            self.assertTrue(manifest_file.exists())
+
+            manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["disc_type"], "audio_cd")
+            self.assertEqual(manifest["total_exported"], 2)
+
+    def test_data_cd_export_emits_done_and_writes_manifest(self):
+        """Data CD exports emit DONE and generate playlists within safe byte capacities."""
+        with tempfile.TemporaryDirectory() as src_dir, tempfile.TemporaryDirectory() as out_dir:
+            src_path = Path(src_dir)
+            out_path = Path(out_dir)
+
+            t1 = src_path / "song1.mp3"
+            t1.write_bytes(b"dummy audio content 1")
+            tracks = [
+                {"path": str(t1), "title": "First Song", "artist": "Artist A", "duration": 180.0, "size": len(t1.read_bytes())},
+            ]
+            discs = calculate_disc_distribution(tracks, disc_capacity_mb=700.0, is_audio_cd=False)
+
+            q = queue.Queue()
+            summary = export_cd_discs(
+                discs=discs,
+                out_dir=out_path,
+                bitrate="original",
+                is_audio_cd=False,
+                progress_queue=q,
+            )
+
+            events = []
+            while not q.empty():
+                events.append(q.get_nowait())
+
+            terminal_events = [e for e in events if e[0] in ("DONE", "ERROR", "CANCELLED")]
+            self.assertEqual(len(terminal_events), 1)
+            self.assertEqual(terminal_events[0][0], "DONE")
+            self.assertEqual(summary["succeeded"], 1)
+
+            manifest_file = out_path / "cd_burn_manifest.json"
+            self.assertTrue(manifest_file.exists())
+            manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["disc_type"], "data_cd")
+            self.assertEqual(manifest["total_exported"], 1)
+
+    def test_data_cd_post_transcode_capacity_guard_raises_and_cleans_files(self):
+        """Over-capacity Data CD exports raise RuntimeError and remove newly exported files."""
+        with tempfile.TemporaryDirectory() as src_dir, tempfile.TemporaryDirectory() as out_dir:
+            src_path = Path(src_dir)
+            out_path = Path(out_dir)
+
+            t1 = src_path / "large.mp3"
+            # 2 MB dummy file
+            t1.write_bytes(b"x" * (2 * 1024 * 1024))
+            tracks = [
+                {"path": str(t1), "title": "Large Track", "artist": "Artist L", "duration": 60.0, "size": len(t1.read_bytes())},
+            ]
+            # Safe bytes minimum limit is max(50.0, capacity - 10) MB = 50 MB,
+            # so let's pre-populate the disc folder with existing files that exceed 50 MB:
+            disc1 = out_path / "Disc 1"
+            disc1.mkdir(parents=True)
+            big_user_file = disc1 / "existing_user_archive.zip"
+            big_user_file.write_bytes(b"0" * (51 * 1024 * 1024))
+
+            discs = [{
+                "disc_number": 1,
+                "tracks": tracks,
+                "capacity_mb": 60.0,
+                "is_audio_cd": False,
+            }]
+
+            with self.assertRaises(RuntimeError) as cm:
+                export_cd_discs(
+                    discs=discs,
+                    out_dir=out_path,
+                    bitrate="original",
+                    is_audio_cd=False,
+                )
+            self.assertIn("Post-transcode capacity check failed", str(cm.exception))
+            # The generated track should have been cleaned up
+            generated_track = disc1 / "01 - large.mp3"
+            self.assertFalse(generated_track.exists())
+            # The pre-existing user file remains safe
+            self.assertTrue(big_user_file.exists())
 
 
 if __name__ == "__main__":
