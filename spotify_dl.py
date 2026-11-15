@@ -33,7 +33,7 @@ from ffmpeg_support import get_ffmpeg_executable
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
-__version__ = "2.2.2"
+__version__ = "2.2.3"
 
 # Ensure stdout/stderr are safe on Windows even under pythonw.exe or CP1252 consoles
 if sys.stdout is None:
@@ -1629,16 +1629,17 @@ def _clean_tag_str(val: Any) -> str:
     return str(val).replace("\xa0", " ").strip()
 
 
+def _artist_identity_key(value: str) -> str:
+    """Normalize an artist identity without treating punctuation as a separator."""
+    return re.sub(r"\s+", " ", _clean_tag_str(value)).casefold()
+
+
 def _extract_lead_artist(artist_str: str) -> str:
-    """Extract primary artist from collaboration and featured strings."""
+    """Strip an explicitly marked featured credit, but preserve ambiguous names."""
     if not artist_str:
         return ""
-    tokens = re.split(
-        r"[,;&/|]|(?:\s+feat\.?|\s+ft\.?|\s+featuring|\s+vs\.?|\s+with)\s+",
-        artist_str,
-        flags=re.IGNORECASE
-    )
-    return tokens[0].strip()
+    match = re.search(r"\s+(?:feat(?:uring)?\.?|ft\.?)\s+", artist_str, flags=re.IGNORECASE)
+    return artist_str[:match.start()].strip() if match else artist_str.strip()
 
 
 def _cluster_album_tracks(track_list: List[dict]):
@@ -1659,8 +1660,12 @@ def _cluster_album_tracks(track_list: List[dict]):
     is_explicit_comp = any(t.get("compilation") for t in track_list) or any(
         t.get("album_artist", "").lower() == "various artists" for t in track_list
     )
+    # Avoid treating ordinary album names such as "The Score" as soundtracks.
     is_soundtrack_title = bool(
-        re.search(r"\b(ost|soundtrack|motion picture|various artists|score|compilation)\b", alb_lower)
+        re.search(
+            r"\b(?:ost|soundtrack|motion picture|original motion picture|motion picture soundtrack|film soundtrack|original score|film score|compilation album)\b",
+            alb_lower,
+        )
     )
 
     lead_map = {}
@@ -1676,11 +1681,12 @@ def _cluster_album_tracks(track_list: List[dict]):
         yield (alb_name, "Various Artists", True, track_list)
         return
 
-    # Check if a single dominant artist family covers all tracks
+    # Only unify exact artist identities (or explicit featured credits already
+    # reduced by _extract_lead_artist). Substring matching merges unrelated acts.
     top_lead = lead_counts.most_common(1)[0][0]
     all_contain_top = all(
-        top_lead.lower() in t.get("artist", "").lower()
-        or top_lead.lower() == t.get("album_artist", "").lower()
+        _artist_identity_key(top_lead) == _artist_identity_key(lead_map[id(t)])
+        or _artist_identity_key(top_lead) == _artist_identity_key(t.get("album_artist", ""))
         for t in track_list
     )
     if all_contain_top:
@@ -1693,7 +1699,7 @@ def _cluster_album_tracks(track_list: List[dict]):
         yield (alb_name, "Various Artists", True, track_list)
         return
 
-    # Disjoint artist families sharing the directory/title (e.g. Queen vs ABBA)
+    # Keep disjoint artist identities separate even when one name is a substring of another.
     families = defaultdict(list)
     for t in track_list:
         art = t.get("artist", "").strip()
@@ -1701,7 +1707,10 @@ def _cluster_album_tracks(track_list: List[dict]):
         lead = lead_map[id(t)]
         matched = None
         for fam in list(families.keys()):
-            if fam.lower() in art.lower() or (aa and fam.lower() == aa.lower()) or (lead and lead.lower() in fam.lower()):
+            if (
+                _artist_identity_key(fam) == _artist_identity_key(lead)
+                or (aa and _artist_identity_key(fam) == _artist_identity_key(aa))
+            ):
                 matched = fam
                 break
         fam_key = matched or (aa if aa and aa.lower() != "various artists" else None) or lead or art or "Unknown Artist"
@@ -1894,7 +1903,7 @@ def fix_library_album_tags(
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_file_path = folder / f".redspindle_tag_backup_{ts}.json"
         backup_dict = {
-            "version": "2.2.2",
+            "version": "2.2.3",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "root_folder": str(folder),
             "total_files": len(files_to_modify),
@@ -2000,9 +2009,25 @@ def restore_tags_from_backup(backup_file: Path, callback: Optional[Callable[[str
         ext = tags.get("ext", f_path.suffix.lower())
         orig_aa = tags.get("album_artist", "")
         orig_comp = tags.get("compilation")
+        # Older v2.2.2 snapshots may not contain artist/album keys. Only
+        # restore those fields when the snapshot explicitly recorded them.
+        has_artist = "artist" in tags
+        has_album = "album" in tags
+        orig_artist = tags.get("artist", "")
+        orig_album = tags.get("album", "")
         try:
             if ext == ".mp3":
                 id3 = ID3(str(f_path))
+                if has_artist:
+                    if orig_artist:
+                        id3.add(TPE1(encoding=3, text=orig_artist))
+                    else:
+                        id3.delall("TPE1")
+                if has_album:
+                    if orig_album:
+                        id3.add(TALB(encoding=3, text=orig_album))
+                    else:
+                        id3.delall("TALB")
                 if orig_aa:
                     id3.add(TPE2(encoding=3, text=orig_aa))
                 else:
@@ -2015,6 +2040,16 @@ def restore_tags_from_backup(backup_file: Path, callback: Optional[Callable[[str
                 restored_count += 1
             elif ext in (".m4a", ".mp4") and MP4:
                 mp4 = MP4(str(f_path))
+                if has_artist:
+                    if orig_artist:
+                        mp4["\xa9ART"] = [orig_artist]
+                    elif "\xa9ART" in mp4:
+                        del mp4["\xa9ART"]
+                if has_album:
+                    if orig_album:
+                        mp4["\xa9alb"] = [orig_album]
+                    elif "\xa9alb" in mp4:
+                        del mp4["\xa9alb"]
                 if orig_aa:
                     mp4["aART"] = [orig_aa]
                 elif "aART" in mp4:
@@ -2027,6 +2062,16 @@ def restore_tags_from_backup(backup_file: Path, callback: Optional[Callable[[str
                 restored_count += 1
             elif ext == ".flac" and FLAC:
                 fl = FLAC(str(f_path))
+                if has_artist:
+                    if orig_artist:
+                        fl["artist"] = [orig_artist]
+                    elif "artist" in fl:
+                        del fl["artist"]
+                if has_album:
+                    if orig_album:
+                        fl["album"] = [orig_album]
+                    elif "album" in fl:
+                        del fl["album"]
                 if orig_aa:
                     fl["albumartist"] = orig_aa
                 elif "albumartist" in fl:
@@ -2739,7 +2784,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="Red Spindle 2.2.2",
+        version="Red Spindle 2.2.3",
     )
 
     args = parser.parse_args()

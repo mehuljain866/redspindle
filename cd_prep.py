@@ -23,6 +23,8 @@ from PIL import Image, ImageTk, ImageDraw
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
+from platform_utils import open_path
+
 # Import transcoding and metadata helpers from spotify_dl
 try:
     from spotify_dl import transcode_audio_file, get_ffmpeg_executable
@@ -403,7 +405,9 @@ def estimate_track_size_bytes(duration_s: float, current_size: int, target_bitra
     raw_audio_bytes = int((kbps * 1000 / 8) * max(1.0, duration_s))
     padded_bytes = raw_audio_bytes + 85_000
 
-    return min(current_size, padded_bytes) if current_size > 0 else padded_bytes
+    # Re-encoding to a requested bitrate can enlarge a low-bitrate source.
+    # Use the larger estimate so packing never assumes a smaller output file.
+    return max(current_size, padded_bytes)
 
 
 def calculate_disc_distribution(
@@ -476,6 +480,41 @@ def calculate_disc_distribution(
         })
 
     return discs
+
+
+def cleanup_stale_disc_folders(output_folder: Path, active_disc_numbers: set[int]) -> List[str]:
+    """Remove Red Spindle-generated files from obsolete Disc N folders only."""
+    if not output_folder.exists():
+        return []
+
+    removed_folders: List[str] = []
+    for disc_folder in output_folder.iterdir():
+        if not disc_folder.is_dir():
+            continue
+        match = re.fullmatch(r"Disc\s+(\d+)", disc_folder.name, flags=re.IGNORECASE)
+        if not match or int(match.group(1)) in active_disc_numbers:
+            continue
+
+        for old_file in disc_folder.iterdir():
+            generated_track = re.fullmatch(
+                r"\d+\s+-\s+.+\.(?:mp3|m4a|flac|opus|ogg|wav)",
+                old_file.name,
+                flags=re.IGNORECASE,
+            )
+            if old_file.is_file() and (
+                generated_track or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
+            ):
+                try:
+                    old_file.unlink()
+                except OSError:
+                    pass
+        try:
+            disc_folder.rmdir()
+            removed_folders.append(disc_folder.name)
+        except OSError:
+            # Preserve user-created files/subfolders; generated tracks are still removed.
+            pass
+    return removed_folders
 
 
 def generate_fallback_album_art(size: Tuple[int, int] = (240, 240)) -> Image.Image:
@@ -1672,6 +1711,11 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                                 messagebox.showinfo("Discs Ready to Burn!", instr)
                                 self._open_output_folder()
                         return
+                    elif kind == "CANCELLED":
+                        p_win.destroy()
+                        self._is_exporting = False
+                        messagebox.showinfo("Export Cancelled", "The disc export was cancelled. Partial track files were removed.")
+                        return
                     elif kind == "ERROR":
                         p_win.destroy()
                         self._is_exporting = False
@@ -1696,16 +1740,25 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             try:
                 out_dir.mkdir(parents=True, exist_ok=True)
 
-                # Pre-assemble all transfer/transcode tasks and clean target folders
+                # Pre-assemble tasks, remove obsolete generated disc folders, and
+                # invalidate any manifest from a previous export before doing work.
                 tasks = []
+                cleanup_stale_disc_folders(out_dir, {d["disc_number"] for d in discs})
+                old_manifest = out_dir / "cd_burn_manifest.json"
+                if old_manifest.exists():
+                    old_manifest.unlink()
                 for disc in discs:
                     disc_num = disc["disc_number"]
                     disc_folder = out_dir / f"Disc {disc_num}"
                     if disc_folder.exists():
                         for old_file in list(disc_folder.iterdir()):
+                            generated_track = re.fullmatch(
+                                r"\d+\s+-\s+.+\.(?:mp3|m4a|flac|opus|ogg|wav)",
+                                old_file.name,
+                                flags=re.IGNORECASE,
+                            )
                             if old_file.is_file() and (
-                                old_file.suffix.lower() in (".mp3", ".m4a", ".flac", ".opus", ".wav", ".m3u", ".txt")
-                                or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
+                                generated_track or old_file.name in ("playlist.m3u", "disc_tracklist.txt")
                             ):
                                 try:
                                     old_file.unlink()
@@ -1765,14 +1818,56 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
                         msg = f"Exporting [{processed_count}/{total_songs}]: {track['title']} - {track['artist']}"
                         progress_queue.put(("PROGRESS", msg, pct))
 
-                if not self._cancel_export:
-                    success_by_disc = defaultdict(list)
-                    for task in successful_tasks:
-                        success_by_disc[task[0]].append(task)
-                    for disc_num in success_by_disc:
-                        success_by_disc[disc_num].sort(key=lambda t: t[1])
+                if self._cancel_export:
+                    # The executor has now joined its workers. Remove every partial
+                    # file created by this run, including tasks that completed just
+                    # before cancellation but were not consumed from the futures queue.
+                    for task in tasks:
+                        dest_path = task[4]
+                        if dest_path.exists():
+                            try:
+                                dest_path.unlink()
+                            except OSError:
+                                pass
+                    progress_queue.put(("CANCELLED", None, None))
+                    return
 
-                    # Write playlists and tracklists using only successfully exported tracks
+                success_by_disc = defaultdict(list)
+                for task in successful_tasks:
+                    success_by_disc[task[0]].append(task)
+                for disc_num in success_by_disc:
+                    success_by_disc[disc_num].sort(key=lambda t: t[1])
+
+                # Verify actual post-transcode sizes, not just estimates, before
+                # writing playlists/manifest that imply a Data CD is burn-ready.
+                if not is_audio_cd:
+                    capacity_errors = []
+                    for disc in discs:
+                        disc_folder = out_dir / f"Disc {disc['disc_number']}"
+                        # Include pre-existing user files preserved in the destination folder.
+                        actual_bytes = sum(
+                            path.stat().st_size for path in disc_folder.rglob("*") if path.is_file()
+                        )
+                        safe_bytes = int(max(50.0, disc["capacity_mb"] - 10.0) * 1024 * 1024)
+                        if actual_bytes > safe_bytes:
+                            capacity_errors.append(
+                                f"Disc {disc['disc_number']}: {actual_bytes / (1024 * 1024):.1f} MB "
+                                f"exceeds the {safe_bytes / (1024 * 1024):.1f} MB safe limit"
+                            )
+                    if capacity_errors:
+                        for task in successful_tasks:
+                            if task[4].exists():
+                                try:
+                                    task[4].unlink()
+                                except OSError:
+                                    pass
+                        raise RuntimeError(
+                            "Post-transcode capacity check failed. No burn-ready playlists were written.\n"
+                            + "\n".join(capacity_errors)
+                            + "\nChoose a lower bitrate or reduce the selection, then export again."
+                        )
+
+                # Write playlists and tracklists using only successfully exported tracks
                     for disc in discs:
                         disc_num = disc["disc_number"]
                         disc_folder = out_dir / f"Disc {disc_num}"
@@ -1858,8 +1953,10 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
     def _open_output_folder(self):
         p = Path(self.out_entry.get().strip()).expanduser().resolve()
         p.mkdir(parents=True, exist_ok=True)
-        if sys.platform == "win32":
-            os.startfile(str(p))
+        try:
+            open_path(p)
+        except Exception as exc:
+            messagebox.showerror("Open Folder Error", f"Could not open {p}: {exc}")
 
     def _open_art_studio(self):
         try:

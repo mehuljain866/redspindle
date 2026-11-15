@@ -27,6 +27,8 @@ from PIL import Image, ImageTk, ImageDraw, ImageFont, ImageFilter, ImageOps
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 
+from platform_utils import open_path
+
 try:
     import cv2
     import numpy as np
@@ -1517,8 +1519,10 @@ class CDArtStudioDialog(ctk.CTkToplevel):
 
     def _open_output_folder(self):
         self.output_folder.mkdir(parents=True, exist_ok=True)
-        if sys.platform == "win32":
-            os.startfile(str(self.output_folder))
+        try:
+            open_path(self.output_folder)
+        except Exception as exc:
+            messagebox.showerror("Open Folder Error", f"Could not open {self.output_folder}: {exc}")
 
     def _toggle_fullscreen(self, event=None):
         try:

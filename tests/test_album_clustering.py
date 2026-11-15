@@ -3,6 +3,7 @@ from pathlib import Path
 import tempfile
 import json
 import shutil
+from mutagen.id3 import ID3, TALB, TCMP, TPE1, TPE2
 
 from spotify_dl import (
     _cluster_album_tracks,
@@ -16,15 +17,18 @@ class AlbumClusteringTests(unittest.TestCase):
     def test_lead_artist_extraction(self):
         self.assertEqual(_extract_lead_artist("Gorillaz feat. Snoop Dogg"), "Gorillaz")
         self.assertEqual(_extract_lead_artist("Daft Punk ft. Pharrell Williams"), "Daft Punk")
-        self.assertEqual(_extract_lead_artist("Queen & David Bowie"), "Queen")
-        self.assertEqual(_extract_lead_artist("Kendrick Lamar with SZA"), "Kendrick Lamar")
+        self.assertEqual(_extract_lead_artist("Queen & David Bowie"), "Queen & David Bowie")
+        self.assertEqual(_extract_lead_artist("Kendrick Lamar with SZA"), "Kendrick Lamar with SZA")
+        self.assertEqual(_extract_lead_artist("AC/DC"), "AC/DC")
+        self.assertEqual(_extract_lead_artist("Earth, Wind & Fire"), "Earth, Wind & Fire")
+        self.assertEqual(_extract_lead_artist("Simon & Garfunkel"), "Simon & Garfunkel")
         self.assertEqual(_extract_lead_artist("Solo Artist"), "Solo Artist")
 
     def test_prevents_greatest_hits_collision(self):
         """Identical generic album titles by different artists must not be merged."""
         tracks = [
             {"album": "Greatest Hits", "artist": "Queen", "album_artist": "", "title": "Bohemian Rhapsody"},
-            {"album": "Greatest Hits", "artist": "Queen & David Bowie", "album_artist": "", "title": "Under Pressure"},
+            {"album": "Greatest Hits", "artist": "Queen feat. David Bowie", "album_artist": "", "title": "Under Pressure"},
             {"album": "Greatest Hits", "artist": "ABBA", "album_artist": "", "title": "Dancing Queen"},
             {"album": "Greatest Hits", "artist": "ABBA", "album_artist": "", "title": "Mamma Mia"},
         ]
@@ -60,28 +64,58 @@ class AlbumClusteringTests(unittest.TestCase):
         self.assertEqual(album_artist, "Various Artists")
         self.assertTrue(is_comp)
 
-    def test_backup_and_restore_data_structure(self):
-        """Verifies JSON backup snapshot serialization and tag restoration logic."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            backup_file = Path(tmpdir) / "test_backup.json"
-            sample_backup = {
-                "created_at": "2026-11-15T12:00:00",
-                "files": {
-                    str(Path(tmpdir) / "nonexistent.mp3"): {
-                        "title": "Test Title",
-                        "artist": "Test Artist",
-                        "album": "Test Album",
-                        "album_artist": "Original Artist",
-                        "compilation": False,
-                    }
-                }
-            }
-            backup_file.write_text(json.dumps(sample_backup), encoding="utf-8")
+    def test_soundtrack_detection_does_not_match_ordinary_album_title(self):
+        tracks = [
+            {"album": "The Score", "artist": "Fugees", "album_artist": "", "title": "Ready or Not"},
+            {"album": "The Score", "artist": "Fugees", "album_artist": "", "title": "Fu-Gee-La"},
+        ]
+        clusters = list(_cluster_album_tracks(tracks))
+        self.assertEqual(len(clusters), 1)
+        self.assertEqual(clusters[0][1], "Fugees")
+        self.assertFalse(clusters[0][2])
 
-            # Restore handles missing file gracefully without crashing
-            res = restore_tags_from_backup(backup_file)
-            self.assertEqual(res.get("total_in_backup"), 1)
-            self.assertEqual(res.get("restored_files"), 0)
+    def test_backup_restore_restores_all_modified_mp3_tags(self):
+        """The snapshot must restore track artist, album, album artist and compilation."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_path = Path(tmpdir) / "sample.mp3"
+            current = ID3()
+            current.add(TPE1(encoding=3, text="Changed Artist"))
+            current.add(TALB(encoding=3, text="Changed Album"))
+            current.add(TPE2(encoding=3, text="Changed Album Artist"))
+            current.add(TCMP(encoding=3, text="1"))
+            current.save(audio_path, v2_version=3)
+
+            backup_file = Path(tmpdir) / "backup.json"
+            backup_file.write_text(json.dumps({"files": {str(audio_path): {
+                "ext": ".mp3", "artist": "Original Artist", "album": "Original Album",
+                "album_artist": "Original Album Artist", "compilation": False,
+            }}}), encoding="utf-8")
+
+            result = restore_tags_from_backup(backup_file)
+            restored = ID3(str(audio_path))
+            self.assertEqual(result["restored_files"], 1)
+            self.assertEqual(str(restored["TPE1"]), "Original Artist")
+            self.assertEqual(str(restored["TALB"]), "Original Album")
+            self.assertEqual(str(restored["TPE2"]), "Original Album Artist")
+            self.assertNotIn("TCMP", restored)
+
+    def test_legacy_backup_without_artist_or_album_keeps_those_fields(self):
+        """Old snapshots must not erase fields they never recorded."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_path = Path(tmpdir) / "legacy.mp3"
+            current = ID3()
+            current.add(TPE1(encoding=3, text="Keep Artist"))
+            current.add(TALB(encoding=3, text="Keep Album"))
+            current.save(audio_path, v2_version=3)
+            backup_file = Path(tmpdir) / "legacy-backup.json"
+            backup_file.write_text(json.dumps({"files": {str(audio_path): {
+                "ext": ".mp3", "album_artist": "Old Album Artist", "compilation": False,
+            }}}), encoding="utf-8")
+
+            restore_tags_from_backup(backup_file)
+            restored = ID3(str(audio_path))
+            self.assertEqual(str(restored["TPE1"]), "Keep Artist")
+            self.assertEqual(str(restored["TALB"]), "Keep Album")
 
 
 if __name__ == "__main__":

@@ -40,7 +40,7 @@ echo -e "    Found: $("$PYTHON_CMD" --version)"
 
 # 2. Check FFmpeg (recommended)
 if ! command -v ffmpeg >/dev/null 2>&1; then
-    echo -e "${YELLOW}[!] FFmpeg not found in PATH. Audio conversion works best with FFmpeg installed.${NC}"
+    echo -e "${YELLOW}[!] System FFmpeg not found. The installed imageio-ffmpeg fallback will be tried; a system build may provide additional codecs.${NC}"
     if [ "$OS_TYPE" = "Darwin" ]; then
         echo -e "    To install: brew install ffmpeg"
     else
@@ -80,12 +80,15 @@ BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
 cat << EOF > "$BIN_DIR/redspindle"
 #!/usr/bin/env bash
-exec "$VENV_PY" "$INSTALL_DIR/gui.py" "\$@"
+exec "$VENV_PY" "$INSTALL_DIR/gui.py"
 EOF
 chmod +x "$BIN_DIR/redspindle"
 
-# Keep backward-compatible alias
-cp "$BIN_DIR/redspindle" "$BIN_DIR/spotify-dl"
+# The legacy command is the command-line downloader, not another GUI shortcut.
+cat << EOF > "$BIN_DIR/spotify-dl"
+#!/usr/bin/env bash
+exec "$VENV_PY" "$INSTALL_DIR/spotify_dl.py" "\$@"
+EOF
 chmod +x "$BIN_DIR/spotify-dl"
 
 # 6. Desktop Launcher creation

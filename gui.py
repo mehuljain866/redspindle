@@ -15,7 +15,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox
 from typing import Any, List, Optional, Set
 
-__version__ = "2.2.2"
+from platform_utils import open_path
+
+__version__ = "2.2.3"
 
 # Ensure stdout/stderr are safe on Windows even under pythonw.exe
 if sys.stdout is None:
@@ -612,10 +614,13 @@ class SpotifyDownloaderApp(ctk.CTk):
 
     def _open_in_explorer(self):
         path_str = self.folder_entry.get().strip()
-        p = Path(path_str)
+        p = Path(path_str).expanduser()
         if not p.exists():
             p.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(p))
+        try:
+            open_path(p)
+        except Exception as exc:
+            messagebox.showerror("Open Folder Error", f"Could not open {p}: {exc}")
 
     def _on_main_window_close(self):
         active = get_active_subwindows()

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.2.3] - 2026-11-15
+
+### Added
+- **Cross-Platform Directory Opener (`platform_utils.py`)**:
+  - Implemented `open_path` supporting Windows Explorer (`os.startfile`), macOS Finder (`open`), and Linux desktop environments (`xdg-open`).
+  - Added unit test suite in `tests/test_platform_utils.py` verifying platform routing and missing path error handling.
+- **Embedded `imageio-ffmpeg` Fallback**:
+  - Added `imageio-ffmpeg>=0.6.0` dependency to ensure audio conversion works out-of-the-box on environments lacking a system FFmpeg installation.
+- **CD Post-Transcode Capacity Guard & Cancellation Cleanup**:
+  - Verifies actual on-disk byte consumption against the 700 MB limit after transcoding, preventing oversized Data CDs from leaving misleading burn manifests.
+  - Automatically cleans up partial track files upon user cancellation.
+- **Safe Stale Disc Folder Cleanup**:
+  - `cleanup_stale_disc_folders` selectively purges only Red Spindle-generated track patterns (`\d+ - .+\.ext`, `playlist.m3u`, `disc_tracklist.txt`) while preserving user-created files in disc directories.
+
+### Changed
+- **Band Name & Collaboration Metadata Protection**:
+  - Preserves punctuation in artist names (such as `AC/DC`, `Simon & Garfunkel`, `Queen & David Bowie`) instead of splitting them on ampersands, slashes, or commas.
+  - Restricts artist unification to exact identity keys, eliminating substring matching collisions.
+  - Narrowed soundtrack title detection regex to protect studio albums named *The Score* while preserving film score matching.
+- **Full Tag Rollback Support**:
+  - Backups and rollback operations now record and restore track `Artist` (`TPE1`) and `Album` (`TALB`) fields alongside `Album Artist` (`TPE2`) and `Compilation` (`TCMP`).
+- **CLI Parser Regression Testing**:
+  - `tests/test_cli.py` now tests real `spotify_dl.py` argument dispatch and flag validation rather than a duplicate mock parser.
+
+---
+
 ## [2.2.2] - 2026-11-15
 
 ### Added

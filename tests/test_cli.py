@@ -1,7 +1,10 @@
 import unittest
 import sys
-import argparse
+import tempfile
+import contextlib
+import io
 from pathlib import Path
+from unittest.mock import patch
 
 
 class CLITests(unittest.TestCase):
@@ -29,30 +32,31 @@ class CLITests(unittest.TestCase):
             self.assertNotIn(ch, dest.name)
         self.assertTrue(dest.name.endswith(".mp3"))
 
-    def test_argument_defaults(self):
-        """Verifies CLI parser defaults conform to Red Spindle 2.2.2 requirements."""
-        # Simulate parser args
+    def test_defaults_are_read_from_the_real_application_parser(self):
+        """Run main() with defaults and inspect the real downsize dispatch."""
         import spotify_dl
-        parser = argparse.ArgumentParser(prog="redspindle")
-        parser.add_argument("url", nargs="?", default=None)
-        parser.add_argument("-o", "--output", default="default_dir")
-        parser.add_argument("--format", choices=["mp3", "m4a", "flac", "opus", "wav"], default="mp3")
-        parser.add_argument("--bitrate", choices=["128k", "192k", "256k", "320k"], default="320k")
-        parser.add_argument("--explicit-mode", choices=["explicit", "clean"], default="explicit")
-        parser.add_argument("--lyrics-script", choices=["hinglish", "devanagari", "original"], default="hinglish")
-        parser.add_argument("--dry-run", action="store_true")
-        parser.add_argument("--no-recursive", action="store_true")
-        parser.add_argument("--no-backup", action="store_true")
+        fake_result = {
+            "total_files": 0, "processed": 0, "original_bytes": 0,
+            "new_bytes": 0, "saved_bytes": 0,
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(sys, "argv", ["spotify_dl.py", "--downsize", folder]):
+                with patch.object(spotify_dl, "batch_transcode_folder", return_value=fake_result) as transcode:
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        spotify_dl.main()
 
-        args = parser.parse_args([])
-        self.assertIsNone(args.url)
-        self.assertEqual(args.format, "mp3")
-        self.assertEqual(args.bitrate, "320k")
-        self.assertEqual(args.explicit_mode, "explicit")
-        self.assertEqual(args.lyrics_script, "hinglish")
-        self.assertFalse(args.dry_run)
-        self.assertFalse(args.no_recursive)
-        self.assertFalse(args.no_backup)
+        kwargs = transcode.call_args.kwargs
+        self.assertEqual(kwargs["target_bitrate"], "320k")
+        self.assertIsNone(kwargs["target_fmt"])
+        self.assertEqual(kwargs["max_workers"], 4)
+
+    def test_real_parser_rejects_unsupported_format(self):
+        import spotify_dl
+        with patch.object(sys, "argv", ["spotify_dl.py", "--format", "aac"]):
+            with contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    spotify_dl.main()
+        self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == "__main__":

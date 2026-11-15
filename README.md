@@ -36,6 +36,8 @@ irm https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.ps1 |
 curl -fsSL https://raw.githubusercontent.com/mehuljain866/redspindle/main/install.sh | bash
 ```
 
+**FFmpeg:** Python installs include the `imageio-ffmpeg` fallback, and standalone builds collect its platform binary. Red Spindle prefers a validated system FFmpeg when available and checks for the encoder it needs; installing a full system FFmpeg build is still recommended when you need broader codec support.
+
 ---
 
 ## Single-File Standalone Downloads (No Python Required)

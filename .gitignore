@@ -10,6 +10,7 @@ __pycache__/
 # Temporary & test folders
 test_out/
 *.tmp
+.agents/
 
 # Distribution / packaging
 build/
