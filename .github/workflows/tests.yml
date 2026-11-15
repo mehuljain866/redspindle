@@ -28,10 +28,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk libgl1 libglib2.0-0 ffmpeg xvfb
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run unit and functional regression test suite
+      - name: Run unit and functional regression test suite (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python -m unittest discover -s tests -v
+
+      - name: Run unit and functional regression test suite (Non-Linux)
+        if: runner.os != 'Linux'
         run: python -m unittest discover -s tests -v

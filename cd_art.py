@@ -679,7 +679,13 @@ class CDArtStudioDialog(ctk.CTkToplevel):
         self.title("CD & Grid Art Studio — Label & Collage Generator")
         self.geometry("1240x840")
         self.minsize(1080, 720)
-        self.transient(parent)
+        self.resizable(True, True)
+        self.bind("<F11>", self._toggle_fullscreen)
+        try:
+            from gui import register_subwindow
+            register_subwindow(self)
+        except Exception:
+            pass
 
         self.source_folder: Path = initial_folder or Path.home() / "Music" / "CD Burn Discs"
         if not self.source_folder.exists():
@@ -1513,3 +1519,20 @@ class CDArtStudioDialog(ctk.CTkToplevel):
         self.output_folder.mkdir(parents=True, exist_ok=True)
         if sys.platform == "win32":
             os.startfile(str(self.output_folder))
+
+    def _toggle_fullscreen(self, event=None):
+        try:
+            if self.state() == "zoomed":
+                self.state("normal")
+            else:
+                self.state("zoomed")
+        except Exception:
+            pass
+
+    def destroy(self):
+        try:
+            from gui import unregister_subwindow
+            unregister_subwindow(self)
+        except Exception:
+            pass
+        super().destroy()

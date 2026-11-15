@@ -13,7 +13,7 @@ import threading
 import time
 from pathlib import Path
 from tkinter import filedialog, messagebox
-from typing import Optional
+from typing import Any, List, Optional, Set
 
 __version__ = "2.2.2"
 
@@ -59,9 +59,47 @@ from spotify_dl import (
 )
 
 
+_root_app: Optional["SpotifyDownloaderApp"] = None
+_active_subwindows: set = set()
+
+
+def get_root_app() -> Optional["SpotifyDownloaderApp"]:
+    global _root_app
+    return _root_app
+
+
+def register_subwindow(win: Any) -> None:
+    _active_subwindows.add(win)
+
+
+def unregister_subwindow(win: Any) -> None:
+    _active_subwindows.discard(win)
+    app = get_root_app()
+    if app and not app.winfo_viewable() and len(get_active_subwindows()) == 0:
+        try:
+            app.destroy()
+        except Exception:
+            pass
+
+
+def get_active_subwindows() -> List[Any]:
+    active = []
+    for w in list(_active_subwindows):
+        try:
+            if w.winfo_exists():
+                active.append(w)
+            else:
+                _active_subwindows.discard(w)
+        except Exception:
+            _active_subwindows.discard(w)
+    return active
+
+
 class SpotifyDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
+        global _root_app
+        _root_app = self
 
         # Window Appearance
         ctk.set_appearance_mode("dark")
@@ -70,6 +108,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         self.title("Red Spindle")
         self.geometry("680x770")
         self.minsize(620, 680)
+        self.protocol("WM_DELETE_WINDOW", self._on_main_window_close)
 
         # Set window icon if available
         icon_path = SCRIPT_DIR / "icon.ico"
@@ -578,22 +617,33 @@ class SpotifyDownloaderApp(ctk.CTk):
             p.mkdir(parents=True, exist_ok=True)
         os.startfile(str(p))
 
+    def _on_main_window_close(self):
+        active = get_active_subwindows()
+        if active:
+            # Hide the main window instead of quitting, so active tools remain usable
+            self.withdraw()
+        else:
+            self.destroy()
+
     def _open_downsize_dialog(self):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = DownsizeDialog(self, f_path)
+        register_subwindow(dialog)
         dialog.focus()
 
     def _open_fix_tags_dialog(self):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = FixAlbumTagsDialog(self, f_path)
+        register_subwindow(dialog)
         dialog.focus()
 
     def _open_explicit_dialog(self):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = ExplicitLyricsDialog(self, f_path)
+        register_subwindow(dialog)
         dialog.focus()
 
     def _open_cd_prep_dialog(self):
@@ -601,6 +651,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = CDBurnPrepDialog(self, f_path)
+        register_subwindow(dialog)
         dialog.focus()
 
     def _open_cd_art_dialog(self):
@@ -608,6 +659,7 @@ class SpotifyDownloaderApp(ctk.CTk):
         folder_str = self.folder_entry.get().strip()
         f_path = Path(folder_str) if folder_str else self.output_dir
         dialog = CDArtStudioDialog(self, f_path)
+        register_subwindow(dialog)
         dialog.focus()
 
     def _append_log(self, text: str):
@@ -819,7 +871,10 @@ class DownsizeDialog(ctk.CTkToplevel):
         self.title("Downsize & Adjust Audio Quality")
         self.geometry("640x670")
         self.minsize(580, 580)
-        self.transient(parent)
+        self.resizable(True, True)
+        self.bind("<F11>", self._toggle_fullscreen)
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        register_subwindow(self)
 
         icon_path = SCRIPT_DIR / "icon.ico"
         if icon_path.exists():
@@ -1352,6 +1407,22 @@ class DownsizeDialog(ctk.CTkToplevel):
         self._append_log(f"ERROR: {err}")
         messagebox.showerror("Downsizing Error", f"An error occurred:\n\n{err}")
 
+    def _toggle_fullscreen(self, event=None):
+        try:
+            if self.state() == "zoomed":
+                self.state("normal")
+            else:
+                self.state("zoomed")
+        except Exception:
+            pass
+
+    def destroy(self):
+        try:
+            unregister_subwindow(self)
+        except Exception:
+            pass
+        super().destroy()
+
     def _on_close(self):
         if self.is_processing:
             if messagebox.askyesno("Confirm Stop", "Downsizing is in progress. Stop and close?"):
@@ -1376,7 +1447,10 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
         self.title("Fix Split Albums (Album Artist Tag Unification)")
         self.geometry("680x620")
         self.minsize(620, 520)
-        self.transient(parent)
+        self.resizable(True, True)
+        self.bind("<F11>", self._toggle_fullscreen)
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        register_subwindow(self)
 
         icon_path = SCRIPT_DIR / "icon.ico"
         if icon_path.exists():
@@ -1645,6 +1719,22 @@ class FixAlbumTagsDialog(ctk.CTkToplevel):
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    def _toggle_fullscreen(self, event=None):
+        try:
+            if self.state() == "zoomed":
+                self.state("normal")
+            else:
+                self.state("zoomed")
+        except Exception:
+            pass
+
+    def destroy(self):
+        try:
+            unregister_subwindow(self)
+        except Exception:
+            pass
+        super().destroy()
+
     def _close(self):
         self._closed = True
         self.destroy()
@@ -1664,7 +1754,10 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
         self.title("Explicit & Clean Audio / Lyrics Manager")
         self.geometry("680x670")
         self.minsize(620, 580)
-        self.transient(parent)
+        self.resizable(True, True)
+        self.bind("<F11>", self._toggle_fullscreen)
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        register_subwindow(self)
 
         icon_path = SCRIPT_DIR / "icon.ico"
         if icon_path.exists():
@@ -2013,6 +2106,22 @@ class ExplicitLyricsDialog(ctk.CTkToplevel):
                 self._msg_queue.put(("error", str(exc)))
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _toggle_fullscreen(self, event=None):
+        try:
+            if self.state() == "zoomed":
+                self.state("normal")
+            else:
+                self.state("zoomed")
+        except Exception:
+            pass
+
+    def destroy(self):
+        try:
+            unregister_subwindow(self)
+        except Exception:
+            pass
+        super().destroy()
 
     def _close(self):
         self._closed = True

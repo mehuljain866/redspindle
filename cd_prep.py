@@ -518,7 +518,14 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
         self.title("CD Burn Prep & Song Curator")
         self.geometry("780x850")
         self.minsize(740, 750)
-        self.transient(parent)
+        self.resizable(True, True)
+        self.bind("<F11>", self._toggle_fullscreen)
+        self.protocol("WM_DELETE_WINDOW", self._close)
+        try:
+            from gui import register_subwindow
+            register_subwindow(self)
+        except Exception:
+            pass
 
         # Set window icon if available
         icon_path = Path(__file__).parent / "icon.ico"
@@ -1863,6 +1870,23 @@ class CDBurnPrepDialog(ctk.CTkToplevel):
             dialog.focus()
         except Exception as e:
             messagebox.showerror("CD Art Studio Error", f"Could not launch CD Art Studio: {e}")
+
+    def _toggle_fullscreen(self, event=None):
+        try:
+            if self.state() == "zoomed":
+                self.state("normal")
+            else:
+                self.state("zoomed")
+        except Exception:
+            pass
+
+    def destroy(self):
+        try:
+            from gui import unregister_subwindow
+            unregister_subwindow(self)
+        except Exception:
+            pass
+        super().destroy()
 
     def _close(self):
         self._closed = True

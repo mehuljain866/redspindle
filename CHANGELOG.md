@@ -39,6 +39,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Eliminated silent fallback to oversized raw audio when transcoding fails, preventing disc folders from overflowing the 700 MB capacity limit.
   - Automatically purges stale audio and playlist files from target `Disc 1`, `Disc 2`, etc. folders before exporting, preventing debris from earlier exports from contaminating subsequent burns.
   - Cleaned vestigial exception handler in export worker that previously masked export errors.
+- **Independent Sub-Window Lifecycles & Fullscreen Support**:
+  - Detached tool dialogs (`DownsizeDialog`, `FixAlbumTagsDialog`, `ExplicitLyricsDialog`, `CDBurnPrepDialog`, `CDArtStudioDialog`) from the main window by removing `transient()` binding.
+  - Sub-windows can be minimized, restored, and moved independently without being affected by the main window state.
+  - Closing the main window (`SpotifyDownloaderApp`) hides it via `withdraw()` while active tool windows remain open and functional, cleanly terminating the process when the last tool window closes.
+  - Enabled resizable window mode and bound `F11` to toggle maximized full-screen view across all sub-windows.
 - **Robust FFmpeg Discovery & Verification (`ffmpeg_support.py`)**:
   - Implemented centralized FFmpeg locator supporting `REDSPINDLE_FFMPEG` environment variable override, system PATH, standard Windows install directories (WinGet/Program Files), and bundled wheel fallbacks.
   - Verifies binary operability (`-version`) and MP3 encoder support (`libmp3lame`) during preflight checks.
